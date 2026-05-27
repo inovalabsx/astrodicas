@@ -112,11 +112,16 @@ async def _enviar_com_foto(texto: str, image_path: str) -> bool:
     try:
         with open(image_path, "rb") as photo:
             async with httpx.AsyncClient(timeout=60) as client:
-                form = {"chat_id": CHANNEL_ID, "caption": texto, "parse_mode": "HTML"}
+                # Caption limit: 1024 chars — manda título curto + separar texto
+                caption = texto[:1000].rsplit("\n", 1)[0] if len(texto) > 1000 else texto
+                form = {"chat_id": CHANNEL_ID, "caption": caption, "parse_mode": "HTML"}
                 files = {"photo": (image_path.split("/")[-1], photo, "image/jpeg")}
                 r = await client.post(url, data=form, files=files)
                 if r.status_code == 200:
                     logger.info("✅ Mensagem enviada ao canal (foto)")
+                    # Se caption foi truncado, manda o texto completo separado
+                    if caption != texto:
+                        await _enviar_texto(texto)
                     return True
                 logger.error(f"❌ Erro Telegram sendPhoto: {r.status_code} {r.text}")
                 return await _enviar_texto(texto)
