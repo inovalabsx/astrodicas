@@ -21,12 +21,15 @@ def gerar_imagem(prompt: str, model: Optional[str] = None) -> Optional[str]:
     Returns:
         URL da imagem gerada, ou None se falhar
     """
-    if not settings.openai_api_key:
+    if not settings.ominiroute_api_key:
         logger.warning("OPENAI_API_KEY não configurada — pulando geração de imagem")
         return None
 
-    client = OpenAI(api_key=settings.openai_api_key)
-    model = model or settings.image_model
+    client = OpenAI(
+        api_key=settings.ominiroute_api_key,
+        base_url=settings.llm_base_url,
+    )
+    model = model or settings.llm_model_image
 
     try:
         response = client.images.generate(

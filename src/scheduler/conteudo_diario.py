@@ -127,8 +127,9 @@ async def gerar_conteudo(
     """
     if llm is None:
         llm = ChatOpenAI(
-            model=settings.llm_model,
-            api_key=settings.openai_api_key,
+            model=settings.llm_model_text,
+            api_key=settings.ominiroute_api_key,
+            base_url=settings.llm_base_url,
         )
 
     if data is None:

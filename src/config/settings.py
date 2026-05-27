@@ -5,14 +5,16 @@ from typing import Optional
 class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str
-    telegram_channel_id: str
+    telegram_channel_id: str = "@astro_dicas"
 
-    # LLM
-    openai_api_key: str
-    llm_model: str = "gpt-4o-mini"
+    # LLM — Provider Ominiroute (separado texto / imagens)
+    llm_base_url: str = "https://lua.ominiroute.inovalabx.com.br/v1"
+    ominiroute_api_key: str
+    llm_model_text: str = "CODING-BASIC"
+    llm_model_image: str = "IMAGENS"
 
     # Database
-    database_url: str = "postgresql://postgres:M2X1X8H9klP10T8xxmywPr8ZDq5b4ejYS3aRNaDCvNoIHNnQ2DKYAKu39CHRS0Av@rt6ykrued0duumj46mk70kpw:5432/astrodicas"
+    database_url: str = "postgresql://postgres:***@rt6ykrued0duumj46mk70kpw:5432/astrodicas"
     redis_url: str = "redis://redis:6379/0"
 
     # Pagamento
@@ -29,11 +31,6 @@ class Settings(BaseSettings):
     # Instagram
     instagram_access_token: Optional[str] = None
     instagram_account_id: Optional[str] = None
-
-    # Imagem
-    image_api_key: Optional[str] = None
-    image_model: str = "dall-e-3"
-    image_style: str = "astrodicas"
 
     # Admin
     admin_username: str = "admin"
