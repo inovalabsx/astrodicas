@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
 
     # Database
-    database_url: str = "postgresql://astrodicas:astrodicas@postgres:5432/astrodicas"
+    database_url: str = "postgresql://postgres:M2X1X8H9klP10T8xxmywPr8ZDq5b4ejYS3aRNaDCvNoIHNnQ2DKYAKu39CHRS0Av@rt6ykrued0duumj46mk70kpw:5432/astrodicas"
     redis_url: str = "redis://redis:6379/0"
 
     # Pagamento

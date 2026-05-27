@@ -1,22 +1,37 @@
 # State — AstroDicas
 
 ## Status
-🛠️ Fase 1: estrutura pronta, banco rodando, bot Telegram detectado
+✅ Alinhamento models ↔ banco real concluído
 
-## Última ação
-- **.env** configurado com tokens reais (Telegram, GitHub)
-- **PostgreSQL** rodando via Docker — 4 tabelas criadas (usuarios, assinaturas, vendas, conteudos_gerados)
-- **Bot Telegram** @astro_dicas_bot testado — OK
-- **Canal @AstroDicas** descoberto (ID: -1003955074430)
-- **Git** configurado e commit inicial feito (34 arquivos)
-- **Testes offline** passando
+## Última ação (27/05/2026)
+Alinhar models SQLAlchemy com schema real do banco `astrodicas`:
 
-## Pendente
-- ❗ Adicionar @astro_dicas_bot como **admin** no canal @AstroDicas pra permitir postagens automáticas
-- Configurar **OpenAI API Key** no .env pra gerar conteúdo com LLM real
-- Testar publicação real no canal
-- Deploy no Coolify
-- Git remote (by-lua/astrodicas)
+**Feature:** `alinhar-models`
+**Spec:** `.fdd/features/alinhar-models/spec.md`
 
-## Próximo passo
-Assim que bot for admin no canal, testar postagem real e configurar scheduler automático
+### O que foi feito
+- Models reescritos: `Assinante`, `Signo`, `Horoscopo`, `Pagamento`, `Compra`, `Postagem`
+- Models antigos removidos: `Usuario`, `Assinatura`, `Venda`, `ConteudoGerado`
+- `settings.py` com DATABASE_URL real (Coolify)
+- `docker-compose.yml` sem postgres (usa banco do Coolify)
+- `main.py` ajustado (import Usuario removido)
+- `.env` virado template (sem tokens reais)
+- `spec.md` ajustada p/ refletir colunas reais da tabela `compras` e `postagens`
+- 12 signos populados no banco
+
+### Arquivos alterados
+- `src/database/models.py` — reescrito
+- `src/config/settings.py` — DATABASE_URL atualizada
+- `docker-compose.yml` — postgres removido
+- `src/main.py` — import Usuario removido
+- `.env` — template limpo
+
+### Testes
+- ✅ `test_alinhamento_banco.py` — 9/9 requisitos passaram (via Hetzner, IP 10.0.1.7)
+- ✅ `test_conteudo_offline.py` — testes offline passaram (não quebrou nada)
+
+### Próximos passos
+- [ ] Push pro GitHub (inovalabsx/astrodicas)
+- [ ] Deploy no Coolify
+- [ ] Implementar bot de postagem (@astro_dicas_bot)
+- [ ] Implementar bot de vendas (@astro_dicas_vendasbot)

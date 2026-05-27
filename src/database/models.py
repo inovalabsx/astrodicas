@@ -1,12 +1,22 @@
-"""AstroDicas — Modelos de banco de dados."""
+"""AstroDicas — Modelos de banco de dados.
 
-import uuid
-from datetime import date, datetime, time
+Alinhado com o schema real do banco `astrodicas` no PostgreSQL do Coolify.
+Tabelas: assinantes, signos, horoscopos, pagamentos, compras, postagens
+"""
+
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey,
-    Integer, Numeric, String, Text, Time, UUID,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -15,76 +25,101 @@ class Base(DeclarativeBase):
     pass
 
 
-class Usuario(Base):
-    __tablename__ = "usuarios"
+class Assinante(Base):
+    """Assinantes do AstroDicas — usuários do bot de vendas."""
 
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
+    __tablename__ = "assinantes"
+
+    id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False)
-    nome = Column(String(255), nullable=False)
-    username = Column(String(255), nullable=True)
+    username = Column(Text, nullable=True)
+    primeiro_nome = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Dados para mapa astral
-    data_nascimento = Column(Date, nullable=True)
-    hora_nascimento = Column(Time, nullable=True)
-    cidade = Column(String(255), nullable=True)
-    estado = Column(String(100), nullable=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    assinaturas = relationship("Assinatura", back_populates="usuario")
-    vendas = relationship("Venda", back_populates="usuario")
+    pagamentos = relationship("Pagamento", back_populates="assinante")
+    compras = relationship("Compra", back_populates="assinante")
 
 
-class Assinatura(Base):
-    __tablename__ = "assinaturas"
+class Signo(Base):
+    """Os 12 signos do zodíaco."""
 
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    usuario_id = Column(UUID, ForeignKey("usuarios.id"), nullable=False)
-    status = Column(String(50), default="ativa")  # ativa, cancelada, expirada
-    plano = Column(String(50), default="mensal")  # mensal, anual
-    inicio = Column(DateTime, default=datetime.utcnow)
-    fim = Column(DateTime, nullable=True)
-    ultimo_pagamento = Column(DateTime, nullable=True)
-    stripe_subscription_id = Column(String(255), nullable=True)
+    __tablename__ = "signos"
 
-    usuario = relationship("Usuario", back_populates="assinaturas")
+    id = Column(Integer, primary_key=True)
+    nome = Column(Text, unique=True, nullable=False)
+    periodo = Column(Text, nullable=False)
+    emoji = Column(Text, nullable=True)
+    descricao = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
 
-
-class Venda(Base):
-    __tablename__ = "vendas"
-
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    usuario_id = Column(UUID, ForeignKey("usuarios.id"), nullable=False)
-
-    # Stripe Payment Intent ID
-    stripe_payment_intent_id = Column(String(255), nullable=True)
-    # Produto (ex: mapa_astral, assinatura_mensal)
-    produto = Column(String(100), nullable=False)
-
-    valor_brl = Column(Numeric(10, 2), nullable=False)
-
-    status = Column(String(50), default="pendente")  # pendente, confirmado, cancelado, reembolsado
-
-    # Dados do PIX gerado
-    pix_cobranca_id = Column(String(255), nullable=True)
-    pix_qrcode = Column(Text, nullable=True)
-    pix_copia_cola = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    confirmado_at = Column(DateTime, nullable=True)
-
-    usuario = relationship("Usuario", back_populates="vendas")
+    horoscopos = relationship("Horoscopo", back_populates="signo")
 
 
-class ConteudoGerado(Base):
-    __tablename__ = "conteudos_gerados"
+class Horoscopo(Base):
+    """Horóscopos gerados por signo e data/tipo."""
 
-    id = Column(UUID, primary_key=True, default=uuid.uuid4)
-    tipo = Column(String(50), nullable=False)  # horoscopo, lua, frase, quiz, etc.
+    __tablename__ = "horoscopos"
+
+    id = Column(Integer, primary_key=True)
+    signo_id = Column(Integer, ForeignKey("signos.id"), nullable=True)
+    data = Column(Date, nullable=False)
+    tipo = Column(Text, default="diario")
     conteudo = Column(Text, nullable=False)
-    imagem_url = Column(Text, nullable=True)
-    prompt_imagem = Column(Text, nullable=True)
-    publicado_telegram = Column(Boolean, default=False)
-    publicado_instagram = Column(Boolean, default=False)
-    data_referencia = Column(Date, default=date.today)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    signo = relationship("Signo", back_populates="horoscopos")
+
+
+class Pagamento(Base):
+    """Pagamentos dos assinantes — PIX, cartão, etc."""
+
+    __tablename__ = "pagamentos"
+
+    id = Column(Integer, primary_key=True)
+    assinante_id = Column(Integer, ForeignKey("assinantes.id"), nullable=True)
+    valor = Column(Numeric(10, 2), nullable=False)
+    moeda = Column(Text, default="BRL")
+    tipo = Column(Text, nullable=False)
+    status = Column(Text, default="pendente")
+    pagamento_id = Column(Text, nullable=True)
+    expira_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assinante = relationship("Assinante", back_populates="pagamentos")
+    compras = relationship("Compra", back_populates="pagamento")
+
+
+class Compra(Base):
+    """Compras realizadas pelos assinantes — produtos adquiridos."""
+
+    __tablename__ = "compras"
+
+    id = Column(Integer, primary_key=True)
+    assinante_id = Column(Integer, ForeignKey("assinantes.id"), nullable=True)
+    pagamento_id = Column(Integer, ForeignKey("pagamentos.id"), nullable=True)
+    produto = Column(Text, nullable=False)
+    valor = Column(Numeric(10, 2), nullable=True)
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    assinante = relationship("Assinante", back_populates="compras")
+    pagamento = relationship("Pagamento", back_populates="compras")
+
+
+class Postagem(Base):
+    """Conteúdo publicado no canal Telegram do AstroDicas."""
+
+    __tablename__ = "postagens"
+
+    id = Column(Integer, primary_key=True)
+    titulo = Column(Text, nullable=True)
+    conteudo = Column(Text, nullable=False)
+    tipo = Column(Text, default="texto")
+    canal_id = Column(Integer, nullable=True)
+    agendada_para = Column(DateTime, nullable=True)
+    publicada_em = Column(DateTime, nullable=True)
+    status = Column(Text, default="rascunho")
+    criado_em = Column(DateTime, default=datetime.utcnow)

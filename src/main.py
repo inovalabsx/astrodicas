@@ -7,7 +7,6 @@ from fastapi import FastAPI
 
 from src.config.settings import settings
 from src.database import init_db, SessionLocal
-from src.database.models import Usuario
 
 
 @asynccontextmanager

@@ -8,8 +8,6 @@ services:
     depends_on:
       redis:
         condition: service_started
-      postgres:
-        condition: service_healthy
     volumes:
       - ./src:/app/src
       - ./static:/app/static
@@ -26,21 +24,5 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: astrodicas-postgres
-    env_file: .env
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-astrodicas}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
 volumes:
   redis_data:
-  postgres_data:
