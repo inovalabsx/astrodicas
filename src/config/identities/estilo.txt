@@ -1,0 +1,33 @@
+# Identidade Visual — AstroDicas
+
+## Cores
+- Primária: #6C3B8C (roxo astral)
+- Secundária: #E8D5F5 (lavanda claro)
+- Destaque: #FFD700 (dourado / estrelas)
+- Fundo: #1A0A2E (roxo escuro noturno)
+- Texto: #FFFFFF (branco)
+- Texto secundário: #C4A0D9 (roxo claro)
+
+## Fontes
+- Títulos: Playfair Display (serifada, elegante)
+- Corpo: Inter (sans-serif, legível)
+- Posts: Playfair Display para manchete, Inter para corpo
+
+## Estilo de imagens
+- Background: gradiente roxo escuro (#1A0A2E → #2D1B4E)
+- Elementos: estrelas, luas, constelações (ícones sutis)
+- Texto sobreposto: branco com sombra suave
+- Moldura: linhas finas douradas nas bordas
+- Tom: místico, noturno, elegante — não caricato
+- Proporção Telegram: 1080x1920 (story)
+- Proporção Instagram: 1080x1080 (feed) ou 1080x1920 (story)
+
+## Prompts de imagem (DALL-E / Stability)
+Base prompt:
+"Astral theme, dark purple gradient background with gold stars and subtle constellation lines, elegant mystical style, Brazilian Portuguese text overlay area reserved, no people, celestial atmosphere, high quality, 4k"
+
+Variações por tipo:
+- Lua: add "glowing crescent moon center-left"
+- Horóscopo: add "zodiac wheel faint in background"
+- Frase: add "open book with golden light emanations"
+- Trânsito: add "planetary alignment minimal dots connected by lines"

@@ -1,0 +1,38 @@
+# /bots/Projects/bot-signos/.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Env
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# DB
+*.db
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Static gerados
+static/imgs/*.png
+static/imgs/*.jpg
+
+# Docker
+.docker/
+
+# Alembic
+src/database/migrations/versions/
