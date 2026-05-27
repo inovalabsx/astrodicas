@@ -15,7 +15,7 @@ from src.config.settings import settings
 from src.database import SessionLocal
 from src.database.models import Horoscopo, Postagem, Signo
 from src.scheduler.conteudo_diario import gerar_conteudo
-from src.scheduler.gerador_imagem import baixar_imagem, gerar_imagem
+from src.scheduler.gerador_imagem import gerar_imagem
 
 logger = logging.getLogger(__name__)
 
@@ -222,17 +222,9 @@ async def publicar(tipo: str) -> bool:
     post_id = _salvar_postagem(tipo=tipo, conteudo=conteudo, titulo=titulo)
 
     # 3. Gerar imagem (não crítica — se falhar, segue sem)
-    image_path = None
-    try:
-        image_url = gerar_imagem(prompt=imagem_prompt)
-        if image_url:
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                tmp_path = tmp.name
-            if baixar_imagem(image_url, tmp_path):
-                image_path = tmp_path
-                logger.info(f"✅ Imagem baixada: {tmp_path}")
-    except Exception as e:
-        logger.warning(f"[PUBLICAR] Imagem ignorada (não crítica): {e}")
+    image_path = gerar_imagem(prompt=imagem_prompt)
+    if image_path:
+        logger.info(f"✅ Imagem pronta: {image_path}")
 
     # 4. Publicar no Telegram
     enviado = await _enviar_telegram(texto=conteudo, image_path=image_path)

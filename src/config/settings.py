@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://lua.ominiroute.inovalabx.com.br/v1"
     ominiroute_api_key: str
     llm_model_text: str = "CODING-BASIC"
-    llm_model_image: str = "IMAGENS"
+    llm_model_image: str = "antigravity/gemini-3.1-flash-image"
 
     # Database
     database_url: str = "postgresql://postgres:***@rt6ykrued0duumj46mk70kpw:5432/astrodicas"
