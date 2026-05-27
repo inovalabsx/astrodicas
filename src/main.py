@@ -71,6 +71,17 @@ async def root():
     }
 
 
+@app.post("/test/postar/{tipo}")
+async def test_postar(tipo: str):
+    """Endpoint de teste — dispara publicação manualmente."""
+    from src.scheduler.publicar import publicar
+    try:
+        resultado = await publicar(tipo=tipo)
+        return {"ok": resultado, "tipo": tipo, "message": f"Publicação de {tipo} {'concluída' if resultado else 'falhou'}"}
+    except Exception as e:
+        return {"ok": False, "tipo": tipo, "error": str(e)}
+
+
 @app.post("/webhook")
 async def telegram_webhook(request: Request):
     """Recebe updates do Telegram via webhook."""
