@@ -1,26 +1,22 @@
 # State — AstroDicas
 
 ## Status
-🛠️ Fase 1 em implementação
-
-## Fase atual
-Fase 1: Canal Telegram com conteúdo automático — estrutura criada, testes offline OK
+🛠️ Fase 1: estrutura pronta, banco rodando, bot Telegram detectado
 
 ## Última ação
-- Estrutura de pastas criada (`src/`, `tests/`, config)
-- `settings.py` + `pyproject.toml` + `.env.example`
-- `docker-compose.yml` + `Dockerfile`
-- `models.py` (usuarios, assinaturas, vendas, conteudos_gerados)
-- `database/__init__.py` (engine + session)
-- `migrations/env.py` (Alembic)
-- `conteudo_diario.py` — 4 tipos de conteúdo (horoscopo, lua, frase, transito)
-- `gerador_imagem.py` — DALL-E integration
-- `cron.py` — APScheduler com jobs 3x/dia + domingo
-- `bot/handler.py` — Telegram bot com /start, /menu, buttons
-- `bot/publisher.py` — publicar_no_canal(), enviar_mensagem_direta()
-- `config/identities/estilo.txt` — identidade visual
-- `tests/test_conteudo_offline.py` — ✅ testes offline passaram
+- **.env** configurado com tokens reais (Telegram, GitHub)
+- **PostgreSQL** rodando via Docker — 4 tabelas criadas (usuarios, assinaturas, vendas, conteudos_gerados)
+- **Bot Telegram** @astro_dicas_bot testado — OK
+- **Canal @AstroDicas** descoberto (ID: -1003955074430)
+- **Git** configurado e commit inicial feito (34 arquivos)
+- **Testes offline** passando
+
+## Pendente
+- ❗ Adicionar @astro_dicas_bot como **admin** no canal @AstroDicas pra permitir postagens automáticas
+- Configurar **OpenAI API Key** no .env pra gerar conteúdo com LLM real
+- Testar publicação real no canal
+- Deploy no Coolify
+- Git remote (by-lua/astrodicas)
 
 ## Próximo passo
-- Configurar Telegram token e testar publicação real no canal
-- Ou aguardar configuração de variáveis de ambiente + deploy
+Assim que bot for admin no canal, testar postagem real e configurar scheduler automático
