@@ -1,4 +1,4 @@
-"""AstroDicas — Handler do bot Telegram (webhook + polling)."""
+"""AstroDicas — Handler do bot Telegram (webhook)."""
 
 import logging
 
@@ -94,38 +94,45 @@ async def button_handler(update: Update, context):
 async def receber_mapa(update: Update, context):
     """Recebe dados do usuário para gerar mapa astral."""
     texto = update.message.text
-    # Placeholder — depois implementar fluxo com LangGraph
     await update.message.reply_text(
         "Obrigado! Seus dados foram recebidos. "
         "Em breve você poderá solicitar seu mapa completo aqui mesmo! 🚀"
     )
 
 
-def criar_app() -> Application:
-    """Cria e configura o Application do Telegram."""
-    app = Application.builder().token(settings.telegram_bot_token).build()
+async def criar_app() -> Application:
+    """Cria e configura o Application do Telegram (modo webhook)."""
+    app = (
+        Application.builder()
+        .token(settings.telegram_bot_token)
+        .updater(None)  # Sem polling — usaremos webhook via FastAPI
+        .build()
+    )
 
     # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CallbackQueryHandler(button_handler))
-
-    # Handler para mensagens de texto (dados do usuário)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receber_mapa))
 
+    await app.initialize()
+    await app.start()
+    logger.info("🤖 Bot Telegram iniciado (webhook)")
     return app
 
 
-async def start_polling():
-    """Inicia o bot em modo polling (dev)."""
-    app = criar_app()
-    logger.info("🤖 Bot AstroDicas iniciando (polling)...")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)
+async def processar_update(app: Application, update_data: dict) -> None:
+    """Processa um update do Telegram recebido via webhook."""
+    update = Update.de_json(update_data, app.bot)
+    if update:
+        await app.process_update(update)
 
 
-def start_webhook():
-    """Configura e inicia webhook (produção)."""
-    app = criar_app()
-    # TODO: configurar webhook com URL do Coolify
-    logger.info("🤖 Bot AstroDicas modo webhook — configurar URL")
-    return app
+async def shutdown_app(app: Application) -> None:
+    """Para o bot de forma segura."""
+    try:
+        await app.stop()
+        await app.shutdown()
+        logger.info("🤖 Bot Telegram parado")
+    except Exception as e:
+        logger.warning(f"Erro ao parar bot: {e}")

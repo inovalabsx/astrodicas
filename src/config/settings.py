@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_channel_id: str = "@astro_dicas"
 
+    # Domain (para webhook)
+    domain: str = "bot.astrodicas.inovalabx.com.br"
+
     # LLM — Provider Ominiroute (separado texto / imagens)
     llm_base_url: str = "https://lua.ominiroute.inovalabx.com.br/v1"
     ominiroute_api_key: str

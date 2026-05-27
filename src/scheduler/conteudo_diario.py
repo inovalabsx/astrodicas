@@ -58,6 +58,26 @@ Regras:
 - NÃO use clichês como "o universo conspira"
 - Termine com uma explicação de 1 parágrafo sobre o significado astrológico""",
 
+    "horoscopo_individual": """Você é um astrólogo brasileiro. Gere o horóscopo do dia para o signo {signo} em português brasileiro natural.
+
+Data: {data}
+Elemento: {elemento}
+
+Regras:
+- 2 parágrafos curtos
+- Tom pessoal, como se fosse um conselho direto pro nativo do signo
+- Inclua uma dica prática ou alerta
+- Use emojis com moderação (🌙 ✨ ⭐)
+- Termine com uma frase positiva
+- NÃO use "previsão" nem "segundo os astros"
+
+Formato:
+🔮 {signo} | {data}
+
+[texto]
+
+✨ Dica: [dica prática]""",
+
     "trânsito": """Você é um astrólogo brasileiro. Explique um trânsito astrológico importante do dia em português brasileiro.
 
 Data: {data}
@@ -149,6 +169,15 @@ async def gerar_conteudo(
             contexto_astral=contexto,
         )
         imagem_prompt = f"Astral theme zodiac sign {signo}, dark purple..."
+    elif tipo == "horoscopo_individual":
+        # Prompt específico pra um signo (usado ao popular horoscopos de todos os 12)
+        signo = None
+        elemento = None
+        mensagem = None
+        # Será chamado com signo e elemento externamente (via publicar.py)
+        # Esse bloco não é usado diretamente — o publicar.py monta a mensagem separadamente
+        imagem_prompt = "Zodiac wheel with all 12 signs, dark purple background"
+        raise ValueError("horoscopo_individual não deve ser chamado via gerar_conteudo() diretamente")
     elif tipo == "lua":
         fase = random.choice(["Nova", "Crescente", "Cheia", "Minguante"])
         mensagem = prompt.format(

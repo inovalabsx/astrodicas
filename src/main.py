@@ -1,17 +1,24 @@
 """AstroDicas — Ponto de entrada do app."""
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from src.config.settings import settings
 from src.database import init_db, SessionLocal
 
+logger = logging.getLogger(__name__)
+
+# Bot Application (inicializado no lifespan)
+_bot_app = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup e shutdown do app."""
+    global _bot_app
+
     # Inicializa banco
     init_db()
     print("Banco de dados inicializado.")
@@ -21,12 +28,25 @@ async def lifespan(app: FastAPI):
     init_scheduler()
     print("Agendador de conteúdo iniciado.")
 
+    # Inicializa o bot Telegram (webhook mode)
+    from src.bot.handler import criar_app, shutdown_app
+    try:
+        _bot_app = await criar_app()
+        # Configura webhook no Telegram
+        webhook_url = f"https://{settings.domain}/webhook"
+        await _bot_app.bot.set_webhook(url=webhook_url)
+        print(f"Webhook configurado: {webhook_url}")
+    except Exception as e:
+        logger.warning(f"Bot Telegram não iniciado: {e}")
+        _bot_app = None
+
     yield
 
     # Shutdown
-    scheduler = app.state.get("scheduler")
-    if scheduler:
-        scheduler.shutdown()
+    if _bot_app:
+        await shutdown_app(_bot_app)
+    from src.scheduler.cron import scheduler
+    scheduler.shutdown()
 
 
 app = FastAPI(
@@ -51,6 +71,14 @@ async def root():
     }
 
 
-# Import routers quando criados
-# from src.admin.api import router as admin_router
-# app.include_router(admin_router, prefix="/admin")
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    """Recebe updates do Telegram via webhook."""
+    global _bot_app
+    if not _bot_app:
+        return {"ok": False, "error": "Bot not initialized"}
+
+    update_data = await request.json()
+    from src.bot.handler import processar_update
+    asyncio.ensure_future(processar_update(_bot_app, update_data))
+    return {"ok": True}

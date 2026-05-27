@@ -1,37 +1,51 @@
 # State — AstroDicas
 
 ## Status
-✅ Alinhamento models ↔ banco real concluído
+✅ Scheduler ativo: salvar + publicar no Telegram
+✅ Bot webhook integrado no FastAPI
+✅ Provider Ominiroute configurado
 
 ## Última ação (27/05/2026)
-Alinhar models SQLAlchemy com schema real do banco `astrodicas`:
+Feature: **Scheduler Ativo** — gerar, salvar no banco e publicar no Telegram
 
-**Feature:** `alinhar-models`
-**Spec:** `.fdd/features/alinhar-models/spec.md`
+**Feature:** `scheduler-ativo`
+**Spec:** `.fdd/features/scheduler-ativo/spec.md`
 
 ### O que foi feito
-- Models reescritos: `Assinante`, `Signo`, `Horoscopo`, `Pagamento`, `Compra`, `Postagem`
-- Models antigos removidos: `Usuario`, `Assinatura`, `Venda`, `ConteudoGerado`
-- `settings.py` com DATABASE_URL real (Coolify)
-- `docker-compose.yml` sem postgres (usa banco do Coolify)
-- `main.py` ajustado (import Usuario removido)
-- `.env` virado template (sem tokens reais)
-- `spec.md` ajustada p/ refletir colunas reais da tabela `compras` e `postagens`
-- 12 signos populados no banco
+#### Scheduler (já rodava, agora faz algo útil)
+- `publicar.py` — novo módulo com fluxo completo: gerar conteúdo → salvar `postagens` → gerar imagem Ominiroute/IMAGENS → enviar pro Telegram → atualizar status
+- `cron.py` — refatorado pra chamar `publicar()` em vez de só printar
+- `conteudo_diario.py` — adicionado prompt `horoscopo_individual` pra gerar horóscopo de cada signo
 
-### Arquivos alterados
-- `src/database/models.py` — reescrito
-- `src/config/settings.py` — DATABASE_URL atualizada
-- `docker-compose.yml` — postgres removido
-- `src/main.py` — import Usuario removido
-- `.env` — template limpo
+#### Bot webhook
+- `handler.py` — refatorado: `criar_app()` sem `updater` (modo webhook), funções `processar_update()` e `shutdown_app()`
+- `main.py` — lifespan usa `criar_app()`, configura webhook no Telegram, endpoint `POST /webhook` recebe updates
+- `settings.py` — adicionado campo `domain` (default: `bot.astrodicas.inovalabx.com.br`)
+
+#### Gerar horóscopos individuais
+- `publicar._gerar_e_salvar_horoscopos_individuais()` — gera conteúdo pra cada um dos 12 signos via Ominiroute/CODING-BASIC, salva na tabela `horoscopos`
+- Chamado automaticamente nos posts de horóscopo (06:00)
+
+#### Limpeza
+- `.env` — template atualizado (removeu campos antigos `LLM_MODEL`, `IMAGE_MODEL`, `IMAGE_STYLE`, `OPENAI_API_KEY`; adicionou `OMINIROUTE_API_KEY`, `DOMAIN`, `LLM_BASE_URL`, `LLM_MODEL_TEXT`, `LLM_MODEL_IMAGE`)
+
+### Arquivos alterados/criados
+- `src/scheduler/publicar.py` — **CRIADO** (887 linhas)
+- `src/scheduler/cron.py` — reescrito (chama `publicar()`)
+- `src/scheduler/conteudo_diario.py` — prompt `horoscopo_individual` + handler
+- `src/bot/handler.py` — webhook mode (criar_app sem updater)
+- `src/main.py` — webhook integrado, lifespan com bot + scheduler
+- `src/config/settings.py` — campo `domain`
+- `.env` — template atualizado
 
 ### Testes
-- ✅ `test_alinhamento_banco.py` — 9/9 requisitos passaram (via Hetzner, IP 10.0.1.7)
-- ✅ `test_conteudo_offline.py` — testes offline passaram (não quebrou nada)
+- ✅ Importação de todos os módulos (settings, models, init_db, publicar, handler)
+- ✅ FastAPI rotas OK (/health, /, /webhook)
+- ✅ 5 prompts de conteúdo (horoscopo, lua, frase, transito, horoscopo_individual)
+- ✅ 12 pares signo/elemento no publicar
+- ✅ publicar() falha graciosamente sem rede (não crasha)
 
 ### Próximos passos
-- [ ] Push pro GitHub (inovalabsx/astrodicas)
-- [ ] Deploy no Coolify
-- [ ] Implementar bot de postagem (@astro_dicas_bot)
-- [ ] Implementar bot de vendas (@astro_dicas_vendasbot)
+- [ ] Commit + push + deploy Coolify
+- [ ] Bot de vendas (@astro_dicas_vendasbot) — próxima feature
+- [ ] Testar E2E no canal Telegram real (no próximo horário agendado)
