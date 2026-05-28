@@ -1,11 +1,10 @@
 """Vendas Bot — Handlers do Telegram (@astro_dicas_vendasbot).
 
-Fluxos:
-  - /start → menu principal
-  - Assinar Plano Lua → onboarding (nome, signo, data/hora/local nascimento) → cobrança PIX
-  - Comprar Mapa Avulso → seleção → dados → cobrança PIX
-  - /pago → usuário avisa que pagou
-  - /admin <telegram_id> → admin ativa manualmente
+Fluxo reformulado para ser mais amigável e vendável:
+  1. /start → apresentação acolhedora + "Conheça nossos planos"
+  2. Clique em "Assinar Plano Lua" → explicação do plano
+  3. Pede nome → data de nascimento → signo é descoberto automaticamente
+  4. Hora (opcional) + cidade → aviso "seu mapa está sendo preparado" → PIX
 """
 import logging
 from datetime import date, datetime
@@ -28,61 +27,71 @@ from src.vendas_bot.models_vendas import (
     criar_assinante,
     ativar_assinante,
     registrar_pagamento,
+    descobrir_signo_por_data,
 )
 
 logger = logging.getLogger(__name__)
 
 # --- Estados da ConversationHandler ---
-(NOME, SIGNO, DATA_NASC, HORA_NASC, CIDADE_NASC, MAPA_SELECAO, MAPA_DADOS) = range(7)
+(NOME, DATA_NASC, HORA_NASC, CIDADE_NASC) = range(4)
 
 # --- PIX info ---
 PIX_MSG = (
-    f"💳 *Dados para pagamento via PIX*\n\n"
+    "💳 *Dados para pagamento via PIX*\n\n"
     f"📱 *Chave PIX:* `{settings.pix_chave}`\n"
     f"🏦 *Banco:* {settings.pix_banco}\n"
     f"👤 *Nome:* {settings.pix_nome}\n\n"
-    f"Após realizar o pagamento, envie /pago aqui no bot "
-    f"para avisar que você pagou. Nosso time irá confirmar "
-    f"e ativar suas compras em breve! ✨"
+    "Após realizar o pagamento, envie /pago aqui no bot "
+    "para avisar que você pagou. Nosso time irá confirmar "
+    "e ativar suas compras em breve! ✨"
 )
 
 # --- Comandos ---
 
 async def start(update: Update, context):
-    """Menu principal do bot de vendas."""
+    """Menu principal — apresentação acolhedora e vendável."""
     user = update.effective_user
+
+    mensagem = (
+        f"✨🌟 *Olá, {user.first_name}!* 🌟✨\n\n"
+        "Seja bem-vindo ao *AstroDicas*! 🌙\n\n"
+        "Aqui você vai descobrir o que os astros têm a dizer "
+        "sobre seu dia, sua vida e seu futuro. "
+        "Todo dia um horóscopo feito especialmente *para você*, "
+        "com base no seu Mapa Astral! 🔮\n\n"
+        "👇 *Conheça nossos planos:*"
+    )
+
     keyboard = [
-        [InlineKeyboardButton("🌙 Assinar Plano Lua (R$9,90)", callback_data="assinar_plano_lua")],
-        [InlineKeyboardButton("🔮 Comprar Mapa Avulso", callback_data="comprar_mapa")],
+        [InlineKeyboardButton("🌙 Assinar Plano Lua — R$9,90/mês", callback_data="assinar_plano_lua")],
+        [InlineKeyboardButton("🔮 Comprar Mapa Avulso — R$19,90", callback_data="comprar_mapa")],
         [InlineKeyboardButton("📋 Minhas Assinaturas", callback_data="minhas_assinaturas")],
         [InlineKeyboardButton("❓ Ajuda", callback_data="ajuda")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        f"✨ Olá, {user.first_name}! Bem-vindo à *AstroDicas Vendas*!\n\n"
-        "🌟 Escolha uma opção abaixo:",
-        reply_markup=reply_markup,
-    )
+    await update.message.reply_text(mensagem, reply_markup=reply_markup)
 
 
 async def help_cmd(update: Update, context):
     """Comando /ajuda."""
     await update.message.reply_text(
-        "❓ *Ajuda - AstroDicas Vendas*\n\n"
-        "🌙 *Plano Lua* — R$9,90/mês\n"
-        "  • Horóscopo diário personalizado no DM\n"
-        "  • Previsão semanal (sábados)\n"
-        "  • Lembrete de luas cheias/novas\n"
-        "  • 🎁 Mapa Astral PDF de brinde\n"
-        "  • 30% OFF em mapas avulsos\n\n"
-        "🔮 *Mapas Avulsos* — R$19,90 (assinante: R$13,93)\n"
+        "❓ *Ajuda — AstroDicas Vendas*\n\n"
+        "🌙 *Plano Lua* — R\$9,90/mês\n"
+        "  • Horóscopo diário personalizado no seu DM 🪐\n"
+        "  • Previsão semanal todo sábado 📅\n"
+        "  • Lembrete de luas cheias e novas 🌕\n"
+        "  • 🎁 *Mapa Astral PDF de brinde* ao assinar!\n"
+        "  • 30% OFF em todos os mapas avulsos 🔥\n\n"
+        "🔮 *Mapas Avulsos* — R\$19,90 (assinante: R\$13,93)\n"
         "  • Mapa Astral Completo\n"
-        "  • Sinastria (Amor)\n"
-        "  • Mapa da Carreira\n"
-        "  • Revolução Solar\n\n"
-        "💳 *Pagamento:* PIX para {settings.pix_chave}\n"
+        "  • Sinastria (Amor) 💕\n"
+        "  • Mapa da Carreira 💼\n"
+        "  • Revolução Solar 🎂\n\n"
+        "💳 *Pagamento:* PIX\n"
+        f"  Chave: `{settings.pix_chave}`\n"
         "  Depois use /pago para avisar\n\n"
-        "📞 *Dúvidas:* Fale com @astro_dicas"
+        "📞 *Dúvidas:* Fale com @astro_dicas\n\n"
+        "Use /start para voltar ao menu principal ✨"
     )
 
 
@@ -94,11 +103,10 @@ async def pago_command(update: Update, context):
     if not assinante:
         await update.message.reply_text(
             "❓ Você ainda não iniciou uma assinatura ou compra.\n"
-            "Use /start e escolha uma opção primeiro!"
+            "Use /start e escolha uma opção primeiro! ✨"
         )
         return
 
-    # Verificar se tem pagamento pendente
     from src.database.models import Pagamento
     from src.database import SessionLocal
 
@@ -116,7 +124,7 @@ async def pago_command(update: Update, context):
     if not pag:
         await update.message.reply_text(
             "✅ Você não tem pagamentos pendentes no momento!\n"
-            "Seus produtos já devem estar ativos."
+            "Seus produtos já devem estar ativos. 🌟"
         )
         return
 
@@ -142,7 +150,7 @@ async def pago_command(update: Update, context):
         f"✅ *Aviso recebido!*\n\n"
         f"Recebemos seu aviso de pagamento. Nosso time irá verificar "
         f"e ativar seus produtos em breve.\n\n"
-        f"Se tiver dúvidas, entre em contato: @astro_dicas"
+        f"Se tiver dúvidas, entre em contato: @astro_dicas ✨"
     )
 
 
@@ -171,7 +179,6 @@ async def ativar_command(update: Update, context):
         return
 
     if ativar_assinante(assinante.id):
-        # Atualizar pagamento pendente para confirmado
         from src.database.models import Pagamento
         from src.database import SessionLocal
 
@@ -224,14 +231,16 @@ async def button_handler(update: Update, context):
 
     if data == "assinar_plano_lua":
         await query.edit_message_text(
-            "🌙 *Plano Lua — R$9,90/mês*\n\n"
-            "Você vai receber:\n"
-            "• Horóscopo diário personalizado\n"
-            "• Previsão semanal (sábados)\n"
-            "• Lembrete de luas cheias/novas\n"
-            "• 🎁 Mapa Astral PDF de brinde\n"
-            "• 30% OFF em mapas avulsos\n\n"
-            "Vamos começar! Qual é o seu *nome*?"
+            "🌙 *Plano Lua — R\$9,90/mês*\n\n"
+            "Com o Plano Lua você recebe:\n"
+            "🪐 *Horóscopo diário* — todo dia uma mensagem dos astros "
+            "feita especialmente para o seu signo 🌟\n"
+            "📅 *Previsão semanal* — todo sábado um panorama da semana\n"
+            "🌕 *Luas cheias e novas* — lembrete na hora certa\n"
+            "🎁 *Mapa Astral PDF de brinde* — seu mapa completo!\n"
+            "🔥 *30% OFF* em mapas avulsos\n\n"
+            "Vamos começar? 😊\n"
+            "Primeiro, *qual é o seu nome completo?*"
         )
         return NOME
 
@@ -248,13 +257,12 @@ async def button_handler(update: Update, context):
             "🔮 *Mapas Avulsos*\n\n"
             "Escolha o mapa que deseja:\n\n"
             "💡 *Assinantes do Plano Lua têm 30% OFF!*\n"
-            "(R$13,93 em vez de R$19,90)",
+            "(R\$13,93 em vez de R\$19,90)",
             reply_markup=reply_markup,
         )
         return
 
     elif data.startswith("mapa_"):
-        # Guardar tipo de mapa selecionado
         context.user_data["mapa_tipo"] = data.replace("mapa_", "")
         nomes = {
             "astral": "Mapa Astral Completo",
@@ -268,7 +276,7 @@ async def button_handler(update: Update, context):
             "Para gerar seu mapa, preciso de alguns dados:\n\n"
             "📅 *Qual a sua data de nascimento?* (DD/MM/AAAA)"
         )
-        return MAPA_DADOS
+        return DATA_NASC  # reusa mesmo estado
 
     elif data == "minhas_assinaturas":
         user = update.effective_user
@@ -277,7 +285,7 @@ async def button_handler(update: Update, context):
             await query.edit_message_text(
                 "📋 *Minhas Assinaturas*\n\n"
                 "Você ainda não tem nenhuma assinatura ou compra.\n\n"
-                "Quer começar? Use /start e escolha uma opção!"
+                "Quer começar? Use /start e escolha uma opção! ✨"
             )
             return
 
@@ -309,11 +317,11 @@ async def button_handler(update: Update, context):
 
     elif data == "ajuda":
         await query.edit_message_text(
-            "❓ *Ajuda - AstroDicas Vendas*\n\n"
+            "❓ *Ajuda — AstroDicas Vendas*\n\n"
             f"💳 *Pagamento:* PIX para `{settings.pix_chave}`\n"
             "  Depois use /pago para avisar\n\n"
             "📞 *Dúvidas:* @astro_dicas\n\n"
-            "Use /start para voltar ao menu principal."
+            "Use /start para voltar ao menu principal ✨"
         )
         return
 
@@ -326,7 +334,7 @@ async def button_handler(update: Update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🌟 Escolha uma opção:",
+            "🌟 *AstroDicas* — Escolha uma opção:",
             reply_markup=reply_markup,
         )
         return
@@ -334,56 +342,38 @@ async def button_handler(update: Update, context):
     return
 
 
+# --- Fluxo de Assinatura (novo, mais amigável) ---
+
 async def receber_nome(update: Update, context):
-    """Recebe o nome do usuário (fluxo assinatura)."""
+    """Recebe o nome completo do usuário."""
     nome = update.message.text.strip()
-    if len(nome) < 2:
-        await update.message.reply_text("❓ Por favor, digite um nome válido (mínimo 2 caracteres).")
+    if len(nome) < 3:
+        await update.message.reply_text(
+            "😊 Por favor, digite seu *nome completo* (mínimo 3 letras)."
+        )
         return NOME
 
     context.user_data["nome"] = nome
-
-    # Mostrar lista de signos
-    signos = get_signos()
-    signos_text = "\n".join(f"{s.emoji or '⭐'} *{s.nome}* ({s.periodo})" for s in signos)
     await update.message.reply_text(
-        f"✍️ Legal, {nome}!\n\n"
-        "Agora me diga: qual é o seu *signo*?\n\n"
-        f"{signos_text}\n\n"
-        "Digite o nome do seu signo (ex: Áries, Touro...)"
-    )
-    return SIGNO
-
-
-async def receber_signo(update: Update, context):
-    """Recebe o signo do usuário."""
-    texto = update.message.text.strip()
-    signo = find_signo_by_nome(texto)
-
-    if not signo:
-        await update.message.reply_text(
-            "❓ Não encontrei esse signo. Digite o nome de um dos 12 signos:\n\n"
-            "Áries, Touro, Gêmeos, Câncer, Leão, Virgem, Libra, Escorpião, Sagitário, Capricórnio, Aquário, Peixes"
-        )
-        return SIGNO
-
-    context.user_data["signo_id"] = signo.id
-    context.user_data["signo_nome"] = signo.nome
-
-    await update.message.reply_text(
-        f"⭐ {signo.emori or ''} *{signo.nome}*! Ótima escolha!\n\n"
-        "📅 Agora, qual a sua *data de nascimento*? (formato: DD/MM/AAAA)\n\n"
-        "Isso é usado para gerar seu Mapa Astral de brinde!"
+        f"✍️ Que nome bonito, {nome.split()[0]}! 😊\n\n"
+        "📅 Agora me conta: *qual a sua data de nascimento?* (formato: DD/MM/AAAA)\n\n"
+        "💡 É rapidinho — com ela eu descubro seu signo e já começo "
+        "a preparar tudo com carinho pra você! 🌟"
     )
     return DATA_NASC
 
 
 async def receber_data_nascimento(update: Update, context):
-    """Recebe a data de nascimento."""
+    """Recebe a data de nascimento e descobre o signo automaticamente."""
     texto = update.message.text.strip()
     try:
         dia, mes, ano = texto.split("/")
         data_nasc = date(int(ano), int(mes), int(dia))
+        if data_nasc > date.today():
+            await update.message.reply_text(
+                "❓ Essa data é futura! 😅 Digite sua data de nascimento real (DD/MM/AAAA)."
+            )
+            return DATA_NASC
     except (ValueError, IndexError):
         await update.message.reply_text(
             "❓ Formato inválido! Use DD/MM/AAAA (ex: 15/03/1995)"
@@ -392,20 +382,35 @@ async def receber_data_nascimento(update: Update, context):
 
     context.user_data["data_nascimento"] = data_nasc
 
-    await update.message.reply_text(
-        "🕐 Qual a *hora do seu nascimento*? (formato HH:MM, ex: 14:30)\n\n"
-        "💡 Se não souber, digite \"não sei\" — usaremos 12:00 como padrão."
-    )
+    # Descobrir signo automaticamente pela data!
+    signo = descobrir_signo_por_data(data_nasc)
+
+    if signo:
+        context.user_data["signo_id"] = signo.id
+        context.user_data["signo_nome"] = signo.nome
+        emoji = signo.emoji or ""
+        await update.message.reply_text(
+            f"{emoji} Olha só! Você é de *{signo.nome}*! Que legal! 🌟\n\n"
+            "🕐 Agora, *qual a hora do seu nascimento?* (formato HH:MM, ex: 14:30)\n\n"
+            "💡 Se não souber, pode responder \"não sei\" — usamos 12:00 como padrão.\n"
+            "Isso ajuda a deixar seu mapa ainda mais preciso! 🔮"
+        )
+    else:
+        await update.message.reply_text(
+            "⭐ Hmm, não consegui identificar seu signo com essa data. "
+            "Você pode *digitar o nome do seu signo*? (ex: Áries, Touro...)"
+        )
+        return DATA_NASC  # pede de novo
+
     return HORA_NASC
 
 
 async def receber_hora_nascimento(update: Update, context):
     """Recebe a hora de nascimento."""
     texto = update.message.text.strip().lower()
-    if texto in ("não sei", "nao sei", "não", "nao", "ns"):
+    if texto in ("não sei", "nao sei", "não", "nao", "ns", "nsei"):
         context.user_data["hora_nascimento"] = "12:00"
     else:
-        # Validar formato
         try:
             h, m = texto.split(":")
             h, m = int(h), int(m)
@@ -414,22 +419,23 @@ async def receber_hora_nascimento(update: Update, context):
             context.user_data["hora_nascimento"] = f"{h:02d}:{m:02d}"
         except (ValueError, IndexError):
             await update.message.reply_text(
-                "❓ Formato inválido! Use HH:MM (ex: 14:30) ou digite \"não sei\""
+                "❓ Formato inválido! Use HH:MM (ex: 14:30) ou digite \"não sei\" 😊"
             )
             return HORA_NASC
 
     await update.message.reply_text(
-        "📍 Qual a *cidade onde você nasceu*?\n\n"
-        "Isso também é usado para gerar seu Mapa Astral com precisão!"
+        "📍 Agora me conta: *qual a cidade onde você nasceu?*\n\n"
+        "Isso também é importante para eu gerar seu Mapa Astral "
+        "com a maior precisão possível! 🌍✨"
     )
     return CIDADE_NASC
 
 
 async def receber_cidade(update: Update, context):
-    """Recebe a cidade e finaliza o onboarding."""
+    """Recebe a cidade, avisa que o mapa está sendo preparado, e mostra PIX."""
     cidade = update.message.text.strip()
     if len(cidade) < 3:
-        await update.message.reply_text("❓ Por favor, digite o nome da cidade.")
+        await update.message.reply_text("😊 Por favor, digite o nome da cidade.")
         return CIDADE_NASC
 
     context.user_data["cidade_nascimento"] = cidade
@@ -440,9 +446,9 @@ async def receber_cidade(update: Update, context):
         telegram_id=user.id,
         primeiro_nome=context.user_data["nome"],
         username=user.username,
-        signo_id=context.user_data["signo_id"],
+        signo_id=context.user_data.get("signo_id"),
         data_nascimento=context.user_data["data_nascimento"],
-        hora_nascimento=context.user_data["hora_nascimento"],
+        hora_nascimento=context.user_data.get("hora_nascimento", "12:00"),
         cidade_nascimento=cidade,
     )
 
@@ -453,15 +459,30 @@ async def receber_cidade(update: Update, context):
         tipo="assinatura",
     )
 
+    # Mensagem de "seu mapa está sendo preparado"
     await update.message.reply_text(
-        f"✨ *Tudo pronto, {context.user_data['nome']}!*\n\n"
-        f"⭐ *Signo:* {context.user_data['signo_nome']}\n"
+        f"✨🌟✨🌟✨🌟✨🌟✨🌟✨🌟✨\n\n"
+        f"{context.user_data['nome'].split()[0]}, recebemos seus dados! 📝\n\n"
+        f"⭐ *Seu signo:* {context.user_data.get('signo_nome', '—')}\n"
         f"📅 *Nascimento:* {context.user_data['data_nascimento'].strftime('%d/%m/%Y')} "
-        f"às {context.user_data['hora_nascimento']}\n"
+        f"às {context.user_data.get('hora_nascimento', '12:00')}\n"
         f"📍 *Cidade:* {cidade}\n\n"
-        "Agora é só fazer o pagamento para ativar seu *Plano Lua*!\n\n"
+        "🔮 *Seu Mapa Astral personalizado está sendo preparado...*\n\n"
+        "Assim que seu pagamento for confirmado, tudo chega direto "
+        "aqui no nosso chat! 🌙\n\n"
+        "✨🌟✨🌟✨🌟✨🌟✨🌟✨🌟✨"
     )
-    await update.message.reply_text(PIX_MSG)
+
+    # Agora a parte do pagamento
+    await update.message.reply_text(
+        "💳 *Para ativar seu Plano Lua, é só fazer o PIX:*\n\n"
+        f"📱 *Chave PIX:* `{settings.pix_chave}`\n"
+        f"🏦 *Banco:* {settings.pix_banco}\n"
+        f"👤 *Nome:* {settings.pix_nome}\n"
+        f"💰 *Valor:* R\$ {settings.preco_plano_lua:.2f}\n\n"
+        "📌 Depois de pagar, use o comando /pago aqui no bot "
+        "para avisar a gente! 💚"
+    )
 
     # Limpar user_data
     context.user_data.clear()
@@ -472,11 +493,13 @@ async def receber_cidade(update: Update, context):
 async def cancelar(update: Update, context):
     """Cancela o fluxo atual."""
     await update.message.reply_text(
-        "❌ Operação cancelada. Use /start para recomeçar."
+        "❌ Tudo bem, operação cancelada. Use /start quando quiser voltar! 😊"
     )
     context.user_data.clear()
     return ConversationHandler.END
 
+
+# --- Fluxo de Mapa Avulso ---
 
 async def mapa_receber_data(update: Update, context):
     """Recebe data de nascimento para mapa avulso."""
@@ -488,7 +511,7 @@ async def mapa_receber_data(update: Update, context):
         await update.message.reply_text(
             "❓ Formato inválido! Use DD/MM/AAAA (ex: 15/03/1995)"
         )
-        return MAPA_DADOS
+        return DATA_NASC
 
     context.user_data["mapa_data_nasc"] = data_nasc
 
@@ -507,6 +530,9 @@ async def mapa_receber_data(update: Update, context):
     preco = settings.preco_mapa_avulso
     if assinante and assinante.ativo:
         preco = round(preco * (1 - settings.desconto_assinante), 2)
+        await update.message.reply_text(
+            "🎉 *Assinante detectado!* Você ganhou 30% OFF! 🔥"
+        )
 
     # Criar pagamento e assinante (simplificado)
     if not assinante:
@@ -524,9 +550,10 @@ async def mapa_receber_data(update: Update, context):
 
     await update.message.reply_text(
         f"🔮 *{nome}*\n\n"
-        f"📅 Data de nascimento: {data_nasc.strftime('%d/%m/%Y')}\n"
-        f"💵 *Valor:* R$ {preco:.2f}\n\n"
-        "Agora é só fazer o pagamento!\n\n"
+        f"📅 Data: {data_nasc.strftime('%d/%m/%Y')}\n"
+        f"💵 *Valor:* R\$ {preco:.2f}\n\n"
+        "✨ Seu mapa já está sendo preparado!\n\n"
+        "Agora é só fazer o pagamento:"
     )
     await update.message.reply_text(PIX_MSG)
 
@@ -534,11 +561,8 @@ async def mapa_receber_data(update: Update, context):
     return ConversationHandler.END
 
 
-# --- Handlers do bot principal ---
-
 async def receber_mapa_avulso(update: Update, context):
     """Handler genérico para receber texto no fluxo de mapa avulso."""
-    # Se chegou aqui sem contexto, ignorar
     if not context.user_data.get("mapa_tipo"):
         return ConversationHandler.END
     return await mapa_receber_data(update, context)
@@ -552,7 +576,6 @@ def assinar_conversation_handler() -> ConversationHandler:
         entry_points=[CallbackQueryHandler(button_handler, pattern="^assinar_plano_lua$")],
         states={
             NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
-            SIGNO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_signo)],
             DATA_NASC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data_nascimento)],
             HORA_NASC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_hora_nascimento)],
             CIDADE_NASC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_cidade)],
@@ -566,7 +589,7 @@ def mapa_conversation_handler() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[CallbackQueryHandler(button_handler, pattern="^mapa_")],
         states={
-            MAPA_DADOS: [MessageHandler(filters.TEXT & ~filters.COMMAND, mapa_receber_data)],
+            DATA_NASC: [MessageHandler(filters.TEXT & ~filters.COMMAND, mapa_receber_data)],
         },
         fallbacks=[CommandHandler("cancelar", cancelar)],
     )

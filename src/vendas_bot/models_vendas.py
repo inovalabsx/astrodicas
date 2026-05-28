@@ -147,3 +147,44 @@ def assinante_assinaturas_ativas(assinante_id: int) -> list:
             .all()
         )
         return compras
+
+
+# --- Descobrir signo pela data de nascimento ---
+
+SIGNOS_POR_DATA = [
+    ("Aquário", date(2000, 1, 21), date(2000, 2, 19)),
+    ("Peixes", date(2000, 2, 20), date(2000, 3, 20)),
+    ("Áries", date(2000, 3, 21), date(2000, 4, 20)),
+    ("Touro", date(2000, 4, 21), date(2000, 5, 20)),
+    ("Gêmeos", date(2000, 5, 21), date(2000, 6, 20)),
+    ("Câncer", date(2000, 6, 21), date(2000, 7, 22)),
+    ("Leão", date(2000, 7, 23), date(2000, 8, 22)),
+    ("Virgem", date(2000, 8, 23), date(2000, 9, 22)),
+    ("Libra", date(2000, 9, 23), date(2000, 10, 22)),
+    ("Escorpião", date(2000, 10, 23), date(2000, 11, 21)),
+    ("Sagitário", date(2000, 11, 22), date(2000, 12, 21)),
+    ("Capricórnio", date(2000, 12, 22), date(2001, 1, 20)),
+]
+
+
+def descobrir_signo_por_data(data_nasc: date) -> Optional[Signo]:
+    """Descobre o signo zodíaco a partir da data de nascimento."""
+    # Normalizar para ano 2000 (ignorar o ano, só dia/mês importam)
+    chave = date(2000, data_nasc.month, data_nasc.day)
+
+    nome_signo = None
+    for nome, inicio, fim in SIGNOS_POR_DATA:
+        # Capricórnio cruza o ano — precisa tratar separado
+        if inicio.month == 12 and inicio.day == 22:
+            if chave >= inicio or chave <= fim:
+                nome_signo = nome
+                break
+        elif inicio <= chave <= fim:
+            nome_signo = nome
+            break
+
+    if not nome_signo:
+        return None
+
+    with SessionLocal() as session:
+        return session.query(Signo).filter(Signo.nome.ilike(nome_signo)).first()
