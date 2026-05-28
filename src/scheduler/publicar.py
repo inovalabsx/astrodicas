@@ -148,26 +148,33 @@ async def _enviar_texto(texto: str) -> bool:
 
 
 async def _enviar_com_foto(texto: str, image_path: str) -> bool:
+    """Envia a foto SEM legenda e o texto completo como mensagem separada."""
+    # 1. Envia a foto pura (sem caption)
+    foto_ok = await _enviar_foto_sem_legenda(image_path)
+    if not foto_ok:
+        return await _enviar_texto(texto)
+
+    # 2. Envia o texto completo separado
+    return await _enviar_texto(texto)
+
+
+async def _enviar_foto_sem_legenda(image_path: str) -> bool:
+    """Envia apenas a imagem, sem caption."""
     url = f"{BASE_URL}/sendPhoto"
     try:
         with open(image_path, "rb") as photo:
             async with httpx.AsyncClient(timeout=60) as client:
-                # Caption limit: 1024 chars — manda título curto + separar texto
-                caption = texto[:1000].rsplit("\n", 1)[0] if len(texto) > 1000 else texto
-                form = {"chat_id": CHANNEL_ID, "caption": caption, "parse_mode": "HTML"}
+                form = {"chat_id": CHANNEL_ID}
                 files = {"photo": (image_path.split("/")[-1], photo, "image/jpeg")}
                 r = await client.post(url, data=form, files=files)
                 if r.status_code == 200:
-                    logger.info("✅ Mensagem enviada ao canal (foto)")
-                    # Se caption foi truncado, manda o texto completo separado
-                    if caption != texto:
-                        await _enviar_texto(texto)
+                    logger.info("✅ Foto enviada ao canal (sem legenda)")
                     return True
                 logger.error(f"❌ Erro Telegram sendPhoto: {r.status_code} {r.text}")
-                return await _enviar_texto(texto)
+                return False
     except Exception as e:
         logger.error(f"❌ Erro ao enviar foto: {e}")
-        return await _enviar_texto(texto)
+        return False
 
 
 def _get_llm() -> ChatOpenAI:
