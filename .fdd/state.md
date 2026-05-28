@@ -70,7 +70,51 @@
 - ✅ Geração de imagem via POST direto: antigravity/gemini-3.1-flash-image (1024×1024) e codex/gpt-5.5 (1792×1024) retornam b64_json válido
 - ✅ Envio com caption truncado: imagem + caption curto + texto completo separado
 
+### 6. Bot de Vendas (@astro_dicas_vendasbot) (28/05)
+**Spec:** `.fdd/features/bot-vendas/spec.md`
+**Map:** `.fdd/features/bot-vendas/map.md`
+
+- **Gateway:** PIX manual — chave: `astrodicas@pix.com` (admin ativa com `/ativar`)
+- **Planos:** Plano Lua R$9,90/mês (horóscopo diário DM + previsão semanal + lembrete luas + Mapa PDF brinde + 30% OFF mapas)
+- **Mapas avulsos:** R$19,90 (R$13,93 assinante): Mapa Astral, Sinastria, Carreira, Revolução Solar
+- **`src/vendas_bot/`** — módulo independente no mesmo repositório, deploy separado no Coolify
+  - `settings.py` — env vars: TELEGRAM_VENDAS_BOT_TOKEN, ADMIN_USER_ID, PIX_CHAVE
+  - `models_vendas.py` — helpers: criar/ativar assinante, registrar pagamento, CRUD
+  - `handler.py` — ConversationHandler onboarding (nome → signo → data → hora → cidade → PIX), /pago, /ativar
+  - `main.py` — FastAPI + webhook + lifespan
+  - `assinatura.py` — lógica de ativação pós-pagamento
+  - `mapa_astral.py` — geração de PDF via LLM OmniRoute + fpdf2
+  - `scheduler.py` — horóscopo personalizado 06:00, previsão semanal sáb 08:00, luas 07:00
+  - `migration.sql` — ALTER TABLE assinantes ADD COLUMN signo_id, data_nascimento, hora_nascimento, cidade_nascimento
+- **`docker/vendas_bot/Dockerfile`** — CMD uvicorn src.vendas_bot.main:app --port 3000
+- **Models:** Assinante estendido com signo_id, data_nascimento, hora_nascimento, cidade_nascimento
+- **Deps:** fpdf2 adicionado ao requirements.txt
+
+## Arquivos alterados/criados (desde último state)
+
+| Arquivo | Ação |
+|---|---|
+| `src/database/models.py` | **PATCH** — Assinante +4 colunas (signo_id, data_nascimento, hora_nascimento, cidade_nascimento), +relationships signo |
+| `src/vendas_bot/__init__.py` | **CRIADO** |
+| `src/vendas_bot/settings.py` | **CRIADO** |
+| `src/vendas_bot/models_vendas.py` | **CRIADO** |
+| `src/vendas_bot/handler.py` | **CRIADO** |
+| `src/vendas_bot/main.py` | **CRIADO** |
+| `src/vendas_bot/assinatura.py` | **CRIADO** |
+| `src/vendas_bot/mapa_astral.py` | **CRIADO** |
+| `src/vendas_bot/scheduler.py` | **CRIADO** |
+| `src/vendas_bot/migration.sql` | **CRIADO** |
+| `docker/vendas_bot/Dockerfile` | **CRIADO** |
+| `requirements.txt` | **PATCH** — reportlab → fpdf2 |
+| `.fdd/features/bot-vendas/spec.md` | **PATCH** — gateway PIX manual |
+| `.fdd/features/bot-vendas/map.md` | **CRIADO** |
+| `.fdd/state.md` | **ATUALIZADO** — este arquivo |
+
 ## Próximos passos
 
-- [ ] **Bot de vendas** (@astro_dicas_vendasbot) — próxima feature
+- [x] Bot de vendas implementado (src/vendas_bot/) — pendente deploy no Coolify
+- [ ] **Executar migration SQL** no banco astrodicas (ALTER TABLE assinantes)
+- [ ] **Configurar deploy** no Coolify: app separado `astrodicas-vendas-bot`
+- [ ] **Configurar env vars** no Coolify: TELEGRAM_VENDAS_BOT_TOKEN, ADMIN_USER_ID, PIX_CHAVE, DATABASE_URL_ASTRODICAS, OMINIROUTE_API_KEY
+- [ ] **Setar webhook** do Telegram: `https://bot-vendas.astrodicas.inovalabx.com.br/webhook`
 - [ ] Testar scheduler automático no próximo horário agendado (06:00)

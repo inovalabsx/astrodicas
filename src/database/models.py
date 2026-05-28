@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    String,
     Text,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -34,12 +35,17 @@ class Assinante(Base):
     telegram_id = Column(Integer, unique=True, nullable=False)
     username = Column(Text, nullable=True)
     primeiro_nome = Column(Text, nullable=True)
+    signo_id = Column(Integer, ForeignKey("signos.id"), nullable=True)
+    data_nascimento = Column(Date, nullable=True)
+    hora_nascimento = Column(String(5), nullable=True)
+    cidade_nascimento = Column(Text, nullable=True)
     ativo = Column(Boolean, default=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     pagamentos = relationship("Pagamento", back_populates="assinante")
     compras = relationship("Compra", back_populates="assinante")
+    signo = relationship("Signo", back_populates="assinantes")
 
 
 class Signo(Base):
@@ -55,6 +61,7 @@ class Signo(Base):
     criado_em = Column(DateTime, default=datetime.utcnow)
 
     horoscopos = relationship("Horoscopo", back_populates="signo")
+    assinantes = relationship("Assinante", back_populates="signo")
 
 
 class Horoscopo(Base):

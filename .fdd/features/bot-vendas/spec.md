@@ -27,7 +27,8 @@ Bot Telegram que vende **assinatura mensal** (Plano Lua R$9,90) e **mapas astrai
 *(Mapa Kármico futuramente)*
 
 ### Gateway
-- **Asaas** — PIX, cartão, boleto. Sandbox primeiro, depois produção.
+- **PIX manual** — chave PIX: `astrodicas@pix.com` (e-mail). Usuário paga, envia comprovante ou "/pago" no bot. Admin ativa manualmente com `/ativar <telegram_id>`.
+- Futuramente: migrar para Asaas (automação total)
 
 ### Arquitetura
 - App separado no mesmo repositório: `src/vendas_bot/`
