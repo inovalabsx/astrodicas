@@ -1,51 +1,76 @@
 # State — AstroDicas
 
 ## Status
-✅ Scheduler ativo: salvar + publicar no Telegram
-✅ Bot webhook integrado no FastAPI
-✅ Provider Ominiroute configurado
+✅ **App rodando** — https://bot-astrodicas.inovalabx.com.br (Coolify Hetzner)
+✅ **Scheduler ativo** — 06:00 (horoscopo), 12:00 (lua), 18:00 (frase), dom 10:00 (transito)
+✅ **Bot webhook** — @astro_dicas_bot integrado no FastAPI
+✅ **Provider Ominiroute** — CODING-BASIC (texto) + antigravity/gemini-3.1-flash-image (imagem)
+✅ **Models alinhados** — 6 tabelas: assinantes, signos, horoscopos, pagamentos, compras, postagens
+✅ **Geração de imagem funcional** — POST direto /v1/images/generations com b64_json
+✅ **Envio de foto com texto** — caption truncado (~1000 chars), texto completo em msg separada
 
-## Última ação (27/05/2026)
-Feature: **Scheduler Ativo** — gerar, salvar no banco e publicar no Telegram
+## Features completadas
 
-**Feature:** `scheduler-ativo`
+### 1. Scheduler Ativo (27/05)
 **Spec:** `.fdd/features/scheduler-ativo/spec.md`
 
-### O que foi feito
-#### Scheduler (já rodava, agora faz algo útil)
-- `publicar.py` — novo módulo com fluxo completo: gerar conteúdo → salvar `postagens` → gerar imagem Ominiroute/IMAGENS → enviar pro Telegram → atualizar status
-- `cron.py` — refatorado pra chamar `publicar()` em vez de só printar
-- `conteudo_diario.py` — adicionado prompt `horoscopo_individual` pra gerar horóscopo de cada signo
+- `publicar.py` — fluxo completo: gerar conteúdo → salvar `postagens` → gerar imagem → enviar Telegram → atualizar status
+- `cron.py` — refatorado pra chamar `publicar()`
+- `conteudo_diario.py` — prompt `horoscopo_individual` pra cada signo
+- `handler.py` — webhook mode (criar_app sem updater)
+- `main.py` — webhook integrado, lifespan com bot + scheduler
+- `settings.py` — campo `domain`, variáveis Ominiroute
 
-#### Bot webhook
-- `handler.py` — refatorado: `criar_app()` sem `updater` (modo webhook), funções `processar_update()` e `shutdown_app()`
-- `main.py` — lifespan usa `criar_app()`, configura webhook no Telegram, endpoint `POST /webhook` recebe updates
-- `settings.py` — adicionado campo `domain` (default: `bot.astrodicas.inovalabx.com.br`)
+### 2. Alinhar Models com Banco (27/05)
+**Spec:** `.fdd/features/alinhar-models/spec.md`
 
-#### Gerar horóscopos individuais
-- `publicar._gerar_e_salvar_horoscopos_individuais()` — gera conteúdo pra cada um dos 12 signos via Ominiroute/CODING-BASIC, salva na tabela `horoscopos`
-- Chamado automaticamente nos posts de horóscopo (06:00)
+- `src/database/models.py` — reescrito com 6 classes: Assinante, Signo, Horoscopo, Pagamento, Compra, Postagem
+- Colunas e FKs exatamente como no schema real do banco `astrodicas` (PostgreSQL Coolify)
+- `checkfirst=True` — não dropa/recria tabelas
 
-#### Limpeza
-- `.env` — template atualizado (removeu campos antigos `LLM_MODEL`, `IMAGE_MODEL`, `IMAGE_STYLE`, `OPENAI_API_KEY`; adicionou `OMINIROUTE_API_KEY`, `DOMAIN`, `LLM_BASE_URL`, `LLM_MODEL_TEXT`, `LLM_MODEL_IMAGE`)
+### 3. Fix Geração de Imagem (28/05)
+**Skill:** `ominiroute-image-gen`
 
-### Arquivos alterados/criados
-- `src/scheduler/publicar.py` — **CRIADO** (887 linhas)
-- `src/scheduler/cron.py` — reescrito (chama `publicar()`)
-- `src/scheduler/conteudo_diario.py` — prompt `horoscopo_individual` + handler
-- `src/bot/handler.py` — webhook mode (criar_app sem updater)
-- `src/main.py` — webhook integrado, lifespan com bot + scheduler
-- `src/config/settings.py` — campo `domain`
-- `.env` — template atualizado
+- **Problema:** OpenAI SDK (`client.images.generate()`) não serializa `provider/model` corretamente para Ominiroute
+- **Solução:** `gerador_imagem.py` reescrito com `urllib.request` direto ao `POST /v1/images/generations`
+- Modelo: `antigravity/gemini-3.1-flash-image` (1024×1024, JPEG)
+- Alternativa: `codex/gpt-5.5` (1792×1024)
+- Resposta: `b64_json` → decodifica → salva como arquivo temporário .jpg
 
-### Testes
+### 4. Fix Caption Truncado (28/05)
+- **Problema:** `sendPhoto` caption > 1024 chars → "Bad Request: message caption is too long"
+- **Solução:** função `_enviar_com_foto()` trunca caption para ~1000 chars (corta no último `\n`), se truncado envia texto completo como `sendMessage` separado
+
+### 5. Deploy Coolify Hetzner (28/05)
+- App UUID: `ivsnnh48a94llvg5r08xsf12`
+- Domínio: `https://bot-astrodicas.inovalabx.com.br`
+- Banco: PostgreSQL `astrodicas` (6 tabelas)
+- Repositório: `github.com/inovalabsx/astrodicas` (branch master)
+
+## Arquivos alterados/criados (desde último state)
+
+| Arquivo | Ação |
+|---|---|
+| `src/database/models.py` | **REESCRITO** — 6 classes alinhadas ao banco |
+| `src/scheduler/gerador_imagem.py` | **REESCRITO** — urllib.request direto ao /v1/images/generations |
+| `src/config/settings.py` | Patch — `llm_model_image` = `antigravity/gemini-3.1-flash-image` |
+| `src/scheduler/publicar.py` | Patch — função `_enviar_com_foto()` com caption truncado |
+| `.fdd/features/alinhar-models/spec.md` | **CRIADO** — spec de alinhamento |
+| `.fdd/state.md` | **ATUALIZADO** — este arquivo |
+
+## Testes
+
 - ✅ Importação de todos os módulos (settings, models, init_db, publicar, handler)
 - ✅ FastAPI rotas OK (/health, /, /webhook)
 - ✅ 5 prompts de conteúdo (horoscopo, lua, frase, transito, horoscopo_individual)
 - ✅ 12 pares signo/elemento no publicar
-- ✅ publicar() falha graciosamente sem rede (não crasha)
+- ✅ publicar() falha graciosamente sem rede
+- ✅ 6 modelos SQLAlchemy → 6 tabelas no banco (init_db sem erro)
+- ✅ POST /test/postar/horoscopo → imagem + texto enviados juntos no canal
+- ✅ Geração de imagem via POST direto: antigravity/gemini-3.1-flash-image (1024×1024) e codex/gpt-5.5 (1792×1024) retornam b64_json válido
+- ✅ Envio com caption truncado: imagem + caption curto + texto completo separado
 
-### Próximos passos
-- [ ] Commit + push + deploy Coolify
-- [ ] Bot de vendas (@astro_dicas_vendasbot) — próxima feature
-- [ ] Testar E2E no canal Telegram real (no próximo horário agendado)
+## Próximos passos
+
+- [ ] **Bot de vendas** (@astro_dicas_vendasbot) — próxima feature
+- [ ] Testar scheduler automático no próximo horário agendado (06:00)

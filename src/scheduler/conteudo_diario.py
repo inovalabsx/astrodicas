@@ -12,25 +12,42 @@ from src.config.settings import settings
 
 # Prompts base para cada tipo de conteúdo
 PROMPTS = {
-    "horoscopo": """Você é um astrólogo brasileiro. Gere um horóscopo do dia para o signo {signo} em português brasileiro natural, informal mas respeitoso.
+    "horoscopo": """Você é um astrólogo brasileiro. Gere o horóscopo GERAL DO DIA para o canal @astro_dicas em português brasileiro natural, acolhedor e místico.
 
 Data: {data}
 Contexto astrológico do dia: {contexto_astral}
 
+Este post vai no CANAL para TODOS os assinantes. Deve cobrir TODOS os 12 signos.
+
 Regras:
-- Máximo 3 parágrafos curtos
+- Comece com 2 parágrafos sobre a energia geral do dia
+- Depois liste CADA um dos 12 signos com 1-2 frases cada
 - Tom acolhedor e místico, sem exageros
-- Inclua uma dica prática relacionada ao signo
-- Termine com uma frase de encerramento positiva
-- Use emojis com moderação (🌙 ✨ ⭐)
+- Inclua uma dica geral no final
+- Use emojis com moderação
 - NÃO use a palavra "previsão"
 
+Signos para incluir (TODOS): Áries 🔥, Touro 🌱, Gêmeos 💨, Câncer 🌊, Leão 🔥, Virgem 🌱, Libra 💨, Escorpião 🌊, Sagitário 🔥, Capricórnio 🌱, Aquário 💨, Peixes 🌊
+
 Formato:
-🔮 {signo} | {data}
+🌙 HORÓSCOPO GERAL DO DIA | {data}
 
-[texto]
+[energia geral do dia em 2 parágrafos]
 
-✨ Dica do dia: [dica prática]""",
+🔮 Áries: ...
+🔮 Touro: ...
+🔮 Gêmeos: ...
+🔮 Câncer: ...
+🔮 Leão: ...
+🔮 Virgem: ...
+🔮 Libra: ...
+🔮 Escorpião: ...
+🔮 Sagitário: ...
+🔮 Capricórnio: ...
+🔮 Aquário: ...
+🔮 Peixes: ...
+
+✨ Dica do dia: [dica prática geral]""",
 
     "lua": """Você é um astrólogo brasileiro. Gere um post sobre a lua do dia em português brasileiro natural.
 
@@ -122,12 +139,8 @@ def _get_contexto_astral(data: date) -> str:
 
 def _get_signo_do_dia() -> str:
     """Retorna o signo do dia baseado na data."""
-    dia = date.today().day
-    # Mapeamento aproximado
-    if dia <= 19:
-        return random.choice(["Áries", "Touro", "Gêmeos"])
-    else:
-        return random.choice(["Câncer", "Leão", "Virgem"])
+    # Mantido por compatibilidade histórica, não usado mais pelo fluxo novo
+    return "Áries"
 
 
 async def gerar_conteudo(
@@ -162,13 +175,11 @@ async def gerar_conteudo(
         raise ValueError(f"Tipo de conteúdo desconhecido: {tipo}")
 
     if tipo == "horoscopo":
-        signo = _get_signo_do_dia()
         mensagem = prompt.format(
-            signo=signo,
             data=data.strftime("%d/%m/%Y"),
             contexto_astral=contexto,
         )
-        imagem_prompt = f"Astral theme zodiac sign {signo}, dark purple..."
+        imagem_prompt = "Wheel of zodiac with all 12 signs, dark purple mystical background"
     elif tipo == "horoscopo_individual":
         # Prompt específico pra um signo (usado ao popular horoscopos de todos os 12)
         signo = None

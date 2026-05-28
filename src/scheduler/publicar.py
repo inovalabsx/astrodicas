@@ -3,7 +3,7 @@
 import logging
 import random
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import httpx
@@ -22,6 +22,46 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = settings.telegram_bot_token
 CHANNEL_ID = settings.telegram_channel_id
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+# Dias da semana em português
+DIAS_SEMANA = [
+    "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"
+]
+
+# Temas de imagem para cada dia da semana
+IMAGEM_DIA_PROMPTS = {
+    "Segunda": "Imagem astrológica mística, fundo roxo escuro com estrelas douradas, texto grande em português '🌙 HORÓSCOPO DE SEGUNDA-FEIRA' em letras cursivas douradas no centro, borda ornamental com símbolos zodiacais, atmosfera de começo de semana e renovação, 1024x1024",
+    "Terça": "Imagem astrológica mística, fundo azul marinho profundo com nebulosas prateadas, texto grande em português '✨ HORÓSCOPO DE TERÇA-FEIRA' em letras cursivas prateadas no centro, chamas de velas ao redor, atmosfera de energia e ação, 1024x1024",
+    "Quarta": "Imagem astrológica mística, fundo verde escuro com partículas douradas, texto grande em português '🔮 HORÓSCOPO DE QUARTA-FEIRA' em letras cursivas verde-ouro no centro, cristais e runas ao redor, atmosfera de comunicação e sabedoria, 1024x1024",
+    "Quinta": "Imagem astrológica mística, fundo vinho com fios de luz dourada, texto grande em português '🌟 HORÓSCOPO DE QUINTA-FEIRA' em letras cursivas douradas no centro, raios de sol ao fundo, atmosfera de prosperidade e expansão, 1024x1024",
+    "Sexta": "Imagem astrológica mística, fundo pôr-do-sol alaranjado com estrelas cintilantes, texto grande em português '🌅 HORÓSCOPO DE SEXTA-FEIRA' em letras cursivas cor de cobre no centro, contornos de montanhas ao fundo, atmosfera de celebração e amor, 1024x1024",
+    "Sábado": "Imagem astrológica mística, fundo lilás com lua crescente brilhante, texto grande em português '🌙 HORÓSCOPO DE SÁBADO' em letras cursivas peroladas no centro, fases da lua ao redor, atmosfera de descanso e introspecção, 1024x1024",
+    "Domingo": "Imagem astrológica mística, fundo dourado suave com luz do amanhecer, texto grande em português '☀️ HORÓSCOPO DE DOMINGO' em letras cursivas douradas no centro, raios solares e asas, atmosfera de renovação e paz interior, 1024x1024",
+}
+
+# Cache da imagem do dia para não regenerar
+_imagem_dia_cache: dict = {"path": None, "dia": None}
+
+
+def _get_imagem_do_dia() -> str | None:
+    """Gera (ou retorna do cache) a imagem temática do dia da semana."""
+    hoje = datetime.now()
+    dia_semana = DIAS_SEMANA[hoje.weekday()]  # 0=Segunda, 6=Domingo
+
+    # Cache: se já gerou hoje, reusa
+    if _imagem_dia_cache["dia"] == hoje.date() and _imagem_dia_cache["path"]:
+        path = _imagem_dia_cache["path"]
+        if Path(path).exists():
+            logger.info(f"📦 Reusando imagem do dia: {dia_semana}")
+            return path
+
+    prompt = IMAGEM_DIA_PROMPTS.get(dia_semana, IMAGEM_DIA_PROMPTS["Segunda"])
+    logger.info(f"🎨 Gerando imagem do dia: {dia_semana}")
+    path = gerar_imagem(prompt=prompt)
+    if path:
+        _imagem_dia_cache["path"] = path
+        _imagem_dia_cache["dia"] = hoje.date()
+    return path
 
 # Mapeamento elemento -> signos
 SIGNOS_ELEMENTOS = [
@@ -226,8 +266,8 @@ async def publicar(tipo: str) -> bool:
     # 2. Salvar como rascunho no banco
     post_id = _salvar_postagem(tipo=tipo, conteudo=conteudo, titulo=titulo)
 
-    # 3. Gerar imagem (não crítica — se falhar, segue sem)
-    image_path = gerar_imagem(prompt=imagem_prompt)
+    # 3. Gerar imagem — imagem temática do dia da semana
+    image_path = _get_imagem_do_dia()
     if image_path:
         logger.info(f"✅ Imagem pronta: {image_path}")
 
