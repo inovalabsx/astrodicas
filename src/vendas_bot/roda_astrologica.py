@@ -84,6 +84,7 @@ def gerar_roda_astrologica(
     asc_grau: float = None,
     aspectos: list = None,
     tamanho: int = 1200,
+    bg_color: str = '#0d0d1a',
 ) -> np.ndarray:
     """Gera a imagem da roda astrológica como array numpy (RGB).
 
@@ -110,13 +111,13 @@ def gerar_roda_astrologica(
     R = 0.88  # raio normalizado (0-1)
 
     # Fundo escuro elegante
-    fig.patch.set_facecolor('#0d0d1a')
-    ax.set_facecolor('#0d0d1a')
+    fig.patch.set_facecolor(bg_color)
+    ax.set_facecolor(bg_color)
 
     # ── Anel externo (borda decorativa) ─────────────────────────────────────
     outer_ring = plt.Circle((cx, cy), R + 0.04, color='#3a3a5c', zorder=1)
     ax.add_patch(outer_ring)
-    inner_ring = plt.Circle((cx, cy), R - 0.02, color='#0d0d1a', zorder=1)
+    inner_ring = plt.Circle((cx, cy), R - 0.02, color=bg_color, zorder=1)
     ax.add_patch(inner_ring)
 
     # ── Calcular posições se não fornecidas ────────────────────────────────
@@ -278,12 +279,13 @@ def salvar_roda(
     asc_grau: float = None,
     aspectos: list = None,
     tamanho: int = 1200,
+    bg_color: str = '#0d0d1a',
 ) -> str:
     """Salva a roda astrológica como PNG e retorna o caminho."""
     from PIL import Image
     import os
     os.makedirs(os.path.dirname(caminho) or '.', exist_ok=True)
-    buf = gerar_roda_astrologica(dt_nasc, lat, lon, posicoes, casas, asc_grau, aspectos, tamanho)
+    buf = gerar_roda_astrologica(dt_nasc, lat, lon, posicoes, casas, asc_grau, aspectos, tamanho, bg_color)
     img = Image.fromarray(buf)
     img.save(caminho, 'PNG')
     return caminho

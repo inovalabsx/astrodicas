@@ -19,6 +19,7 @@ import io
 import json
 import logging
 import os
+import math
 from datetime import date, datetime
 from typing import Optional
 
@@ -74,20 +75,20 @@ PALETAS = {
         "icone_titulo": "★",
         "cor_tag": (100, 160, 220),
     },
-    "revolucao": {
-        "cor_principal": (40, 140, 80),       # verde energizado
-        "cor_secundaria": (20, 100, 60),
-        "cor_terciaria": (180, 240, 200),
-        "cor_texto": (230, 250, 240),
-        "cor_fundo": (10, 30, 20),
-        "cor_destaque": (100, 255, 150),
-        "cor_texto_escuro": (20, 40, 30),
-        "cor_card": (15, 45, 30),
-        "cor_linha": (50, 160, 100),
-        "gradiente_inicio": (30, 120, 70),
-        "gradiente_fim": (8, 20, 15),
-        "icone_titulo": "☀",
-        "cor_tag": (80, 200, 130),
+    "prosperidade": {
+        "cor_principal": (0, 100, 60),        # verde esmeralda
+        "cor_secundaria": (0, 70, 40),
+        "cor_terciaria": (180, 230, 150),     # verde claro
+        "cor_texto": (240, 255, 240),
+        "cor_fundo": (5, 25, 15),
+        "cor_destaque": (255, 215, 0),        # dourado
+        "cor_texto_escuro": (20, 40, 25),
+        "cor_card": (10, 40, 25),
+        "cor_linha": (60, 160, 100),
+        "gradiente_inicio": (0, 80, 50),
+        "gradiente_fim": (5, 20, 10),
+        "icone_titulo": "◆",                  # diamante
+        "cor_tag": (130, 200, 150),
     },
 }
 
@@ -95,7 +96,7 @@ TIPO_NOMES = {
     "astral": "Mapa Astral Completo",
     "sinastria": "Sinastria Amorosa",
     "carreira": "Mapa da Carreira",
-    "revolucao": "Revolução Solar",
+    "prosperidade": "Mapa da Prosperidade",
 }
 
 # ── Classe FPDF com footer automático ──────────────────────────────────────────
@@ -169,7 +170,7 @@ def _gerar_capa(
     nome: str, tipo: str, signo: str,
     data_nascimento: str, cidade: str, paleta: dict,
 ) -> Image.Image:
-    """Gera imagem de capa decorada."""
+    """Gera imagem de capa decorada com elementos visuais por tipo de mapa."""
     fonts = font_manager()
     font_bold = fonts.get("bold", fonts.get("fallback_bold"))
     font_reg = fonts.get("regular", fonts.get("fallback_regular"))
@@ -184,23 +185,163 @@ def _gerar_capa(
         color = interp_color(paleta["gradiente_inicio"], paleta["gradiente_fim"], t)
         draw.line([(0, y), (w, y)], fill=color)
 
-    # Círculo decorativo central
     cx, cy = w // 2, h // 2 - 80
-    for r in range(300, 100, -20):
-        t_circulo = (r - 100) / 200
-        cor = interp_color(paleta["cor_principal"], paleta["cor_secundaria"], t_circulo)
-        draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=cor, width=2)
 
-    # Símbolo zodiacal central (usando texto grande)
+    # ── Elementos visuais por tipo ──────────────────────────────────────────
+    if tipo == "sinastria":
+        # Anéis entrelaçados (dois círculos sobrepostos)
+        for r in range(220, 60, -15):
+            t_circulo = (r - 60) / 160
+            cor = interp_color(paleta["cor_destaque"], paleta["cor_secundaria"], t_circulo)
+            # Círculo esquerdo
+            draw.ellipse([cx - r - 30, cy - r, cx - r + 30 + r*2, cy + r],
+                         outline=cor, width=2)
+            # Círculo direito
+            draw.ellipse([cx + r - r - 30, cy - r, cx + r + 30, cy + r],
+                         outline=cor, width=2)
+
+        # Pequenos corações decorativos no entorno
+        for ang in range(0, 360, 45):
+            rad = math.radians(ang - 90)
+            rx = cx + 320 * math.cos(rad)
+            ry = cy + 320 * math.sin(rad)
+            draw.text((rx - 10, ry - 10), "♥",
+                      fill=paleta["cor_terciaria"],
+                      font=ImageFont.truetype(font_reg, 24) if font_reg else ImageFont.load_default())
+
+    elif tipo == "carreira":
+        # Elementos SOMENTE nas bordas — centro livre pro texto
+        # 1. Linhas ascendentes nas laterais (esquerda e direita)
+        for side in [-1, 1]:
+            for i in range(20):
+                y_pos = int(cy - 300 + i * 30)
+                x_start = cx + side * (int(w * 0.35) - i * 8)
+                x_end = cx + side * (int(w * 0.42) - i * 4)
+                t_lin = i / 20
+                cor = interp_color(paleta["cor_destaque"], paleta["cor_linha"], t_lin)
+                draw.line([(x_start, y_pos), (x_end, y_pos)], fill=cor, width=1)
+
+        # 2. Arcos geométricos nos cantos superiores
+        for side in [-1, 1]:
+            cx_canto = cx + side * int(w * 0.42)
+            cy_canto = cy - 250
+            for r in range(30, 120, 10):
+                t_arco = (r - 30) / 90
+                cor = interp_color(paleta["cor_destaque"], paleta["cor_fundo"], t_arco)
+                # Desenha arco de 0 a 180 (lado esquerdo vira direito)
+                for ang in range(0, 91, 5):
+                    rad = math.radians(ang)
+                    px = cx_canto + side * int(r * math.cos(rad))
+                    py = cy_canto + int(r * math.sin(rad))
+                    draw.ellipse([px-1, py-1, px+1, py+1], fill=cor, outline=None)
+
+        # 3. Pequenas partículas diagonais (sem tocar o centro)
+        for i in range(50):
+            ang = math.radians(i * 73)
+            raio = int(400 + 100 * math.sin(i * 0.5))
+            if raio < 200:
+                continue
+            px = cx + int(raio * math.cos(ang))
+            py = cy + 80 + int(raio * math.sin(ang))
+            # Skip if within text zone
+            if abs(px - cx) < 250 and abs(py - cy - 80) < 300:
+                continue
+            t_p = abs(i - 25) / 25
+            cor = interp_color(paleta["cor_destaque"], paleta["cor_secundaria"], t_p)
+            raio_p = max(1, int(3 - t_p * 2))
+            draw.ellipse([px - raio_p, py - raio_p, px + raio_p, py + raio_p],
+                         fill=cor, outline=None)
+
+        # 4. Seta sutil no canto inferior apontando pra cima
+        y_seta = cy + 350
+        for side in [-1, 1]:
+            x_base = cx + side * 300
+            pontos_seta = [
+                (x_base, y_seta - 30),
+                (x_base - 15, y_seta),
+                (x_base - 6, y_seta),
+                (x_base - 6, y_seta + 20),
+                (x_base + 6, y_seta + 20),
+                (x_base + 6, y_seta),
+                (x_base + 15, y_seta),
+            ]
+            draw.polygon(pontos_seta, fill=paleta["cor_linha"], outline=None)
+
+    elif tipo == "prosperidade":
+        # Diamante central (losango facetado)
+        diamante_y = cy - 60
+        # Facetas do diamante
+        faces_diamante = [
+            [(cx, diamante_y - 100), (cx - 60, diamante_y - 20), (cx, diamante_y + 40)],
+            [(cx, diamante_y - 100), (cx + 60, diamante_y - 20), (cx, diamante_y + 40)],
+            [(cx, diamante_y - 100), (cx - 60, diamante_y - 20), (cx, diamante_y - 20)],
+            [(cx, diamante_y - 100), (cx + 60, diamante_y - 20), (cx, diamante_y - 20)],
+            [(cx - 60, diamante_y - 20), (cx, diamante_y + 40), (cx, diamante_y - 20)],
+            [(cx + 60, diamante_y - 20), (cx, diamante_y + 40), (cx, diamante_y - 20)],
+        ]
+        for idx, face in enumerate(faces_diamante):
+            t_face = idx / len(faces_diamante)
+            cor = interp_color(paleta["cor_destaque"], paleta["cor_secundaria"], t_face * 0.7)
+            draw.polygon(face, fill=cor, outline=paleta["cor_terciaria"], width=1)
+
+        # Brilho em volta do diamante (halo radial)
+        for r in range(160, 60, -10):
+            t_brilho = (r - 60) / 100
+            cor = (255, 215, 0, int(40 * t_brilho))
+            cor_rgb = (min(255, int(paleta["cor_destaque"][0] * t_brilho + paleta["cor_fundo"][0] * (1-t_brilho))),
+                       min(255, int(paleta["cor_destaque"][1] * t_brilho + paleta["cor_fundo"][1] * (1-t_brilho))),
+                       min(255, int(paleta["cor_destaque"][2] * t_brilho + paleta["cor_fundo"][2] * (1-t_brilho))))
+            draw.ellipse([cx - r, diamante_y - r, cx + r, diamante_y + r],
+                         outline=cor_rgb, width=1)
+
+        # Moedas/partículas de ouro em volta
+        for i in range(24):
+            ang = i * 15
+            rad = math.radians(ang - 90)
+            rx = cx + 280 * math.cos(rad)
+            ry = diamante_y + 60 + 220 * math.sin(rad)
+            t_moeda = (i % 8) / 8
+            cor_m = interp_color(paleta["cor_destaque"], paleta["cor_principal"], t_moeda)
+            raio_m = 8 if i % 3 == 0 else 5
+            draw.ellipse([rx - raio_m, ry - raio_m, rx + raio_m, ry + raio_m],
+                         fill=cor_m, outline=paleta["cor_terciaria"], width=1)
+
+        # Linhas de energia ascendentes
+        for i in range(60, 0, -1):
+            ang = i * 6.28 / 60
+            px = cx + int(100 * math.cos(ang * 3) * (i / 60))
+            py = diamante_y + 200 - i * 5
+            t_en = i / 60
+            cor_en = interp_color(paleta["cor_destaque"], paleta["cor_fundo"], t_en)
+            draw.ellipse([px - 2, py - 2, px + 2, py + 2], fill=cor_en, outline=None)
+
+    else:  # astral (padrão)
+        # Círculo decorativo central (já existente)
+        for r in range(300, 100, -20):
+            t_circulo = (r - 100) / 200
+            cor = interp_color(paleta["cor_principal"], paleta["cor_secundaria"], t_circulo)
+            draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=cor, width=2)
+
+        # Estrelas decorativas (✦) em volta
+        for ang in range(0, 360, 30):
+            rad = math.radians(ang - 90)
+            rx = cx + 340 * math.cos(rad)
+            ry = cy + 340 * math.sin(rad)
+            t_estrela = (ang % 360) / 360
+            cor_estrela = interp_color(paleta["cor_tag"], paleta["cor_secundaria"], t_estrela)
+            font_estrela = ImageFont.truetype(font_reg, 20) if font_reg else ImageFont.load_default()
+            draw.text((rx - 8, ry - 8), "✦",
+                      fill=cor_estrela, font=font_estrela)
+
+    # ── Elementos comuns a todos os tipos ──────────────────────────────────
     simbolos = {
         "Áries": "♈", "Touro": "♉", "Gêmeos": "♊", "Câncer": "♋",
         "Leão": "♌", "Virgem": "♍", "Libra": "♎", "Escorpião": "♏",
         "Sagitário": "♐", "Capricórnio": "♑", "Aquário": "♒", "Peixes": "♓",
     }
     simb = simbolos.get(signo, "✦")
-
-    # Título: tipo de mapa
     titulo = TIPO_NOMES.get(tipo, tipo)
+
     try:
         font_titulo = ImageFont.truetype(font_bold, 48) if font_bold else ImageFont.load_default()
         font_nome = ImageFont.truetype(font_bold, 36) if font_bold else ImageFont.load_default()
@@ -209,7 +350,7 @@ def _gerar_capa(
     except Exception:
         font_titulo = font_nome = font_info = font_simbolo = ImageFont.load_default()
 
-    # Símbolo grande
+    # Símbolo grande central
     bbox = draw.textbbox((0, 0), simb, font=font_simbolo)
     sw, sh = bbox[2] - bbox[0], bbox[3] - bbox[1]
     draw.text(
@@ -249,20 +390,16 @@ def _gerar_capa(
 # ── Funções de página do PDF ───────────────────────────────────────────────────
 
 def _pdf_page_capa(pdf: FPDFPremium, img_capa: Image.Image):
-    """Adiciona a capa como primeira página."""
+    """Adiciona a capa como primeira página — ocupa a A4 inteira."""
     pdf.add_page()
     w, h = 210, 297
     pdf.set_fill_color(*pdf._paleta["cor_fundo"])
     pdf.rect(0, 0, w, h, style='F')
 
-    # Converter PIL p/ temp file e inserir
+    # Converter PIL p/ temp file e inserir — OCUPA A PÁGINA INTEIRA
     capa_path = "/tmp/_capa_temp.png"
     img_capa.save(capa_path, "PNG")
-    # Redimensionar pra caber na página A4
-    img_h = 275
-    img_w = int(img_h * 0.707)  # proporção A4
-    x_offset = (w - img_w) / 2
-    pdf.image(capa_path, x=x_offset, y=10, w=img_w, h=img_h)
+    pdf.image(capa_path, x=0, y=0, w=w, h=h)
 
 
 def _pdf_page_sumario(pdf: FPDFPremium, secoes: list, paleta: dict, nome: str, tipo: str):
@@ -481,18 +618,22 @@ def gerar_mapa_premium(
     try:
         from fpdf import FPDF
 
-        # ── 1. Rodas astrológica ──────────────────────────────────────────
+        # ── 1. Roda astrológica ──────────────────────────────────────────
+        paleta = PALETAS.get(tipo, PALETAS["astral"])
         roda_path = "/tmp/roda_astrologica.png"
         assinatura = f"{nome.upper()} — {data_nascimento.strftime('%d/%m/%Y')}"
         try:
-            from .roda_astrologica import gerar_roda_astrologica
-            gerar_roda_astrologica(data_nascimento, cidade, roda_path)
+            from .roda_astrologica import salvar_roda
+            from .astro_math import geocode_cidade
+            dt_nasc = datetime.combine(data_nascimento, datetime.strptime(hora_nascimento, "%H:%M").time())
+            lat, lon = geocode_cidade(cidade)
+            bg_hex = '#%02x%02x%02x' % paleta.get("cor_fundo", (18, 12, 35))
+            salvar_roda(dt_nasc, lat, lon, roda_path, bg_color=bg_hex)
         except Exception as e:
             logger.warning(f"Roda não gerada, seguindo com placeholder: {e}")
             _criar_roda_placeholder(roda_path, nome, tipo, signo)
 
         # ── 2. Capa ───────────────────────────────────────────────────────
-        paleta = PALETAS.get(tipo, PALETAS["astral"])
         data_str = data_nascimento.strftime("%Y-%m-%d")
         nome_arquivo = nome.lower().replace(" ", "_")
         img_capa = _gerar_capa(
