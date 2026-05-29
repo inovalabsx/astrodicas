@@ -1,38 +1,31 @@
+
 # /bots/Projects/bot-signos/.gitignore
-
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-*.egg
-dist/
-build/
-
+# Alembic
+# DB
+# Docker
 # Env
+# IDE
+# Logs
+# OS
+# Python
+# Static gerados
+*.db
+*.egg
+*.egg-info/
+*.log
+*.py[cod]
+*.sqlite3
+.DS_Store
+.docker/
 .env
 .env.local
-
-# IDE
-.vscode/
 .idea/
-
-# DB
-*.db
-*.sqlite3
-
-# OS
-.DS_Store
+.vscode/
 Thumbs.db
-
-# Logs
-*.log
-
-# Static gerados
-static/imgs/*.png
-static/imgs/*.jpg
-
-# Docker
-.docker/
-
-# Alembic
+__pycache__/
+build/
+dist/
 src/database/migrations/versions/
+static/imgs/*.jpg
+static/imgs/*.png
+teste_mapa_premium.pdf

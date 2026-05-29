@@ -109,7 +109,7 @@ class FPDFPremium(FPDF):
     def __init__(self, paleta: dict):
         super().__init__()
         self._paleta = paleta
-        self._footer_h = 22
+        self._footer_h = 16
 
     def footer(self):
         """Desenha o footer automaticamente em todas as páginas."""
@@ -118,7 +118,7 @@ class FPDFPremium(FPDF):
         if self.page_no() <= 1:
             return
 
-        self.set_y(-self._footer_h - 5)
+        self.set_y(-self._footer_h - 3)
         cor_card = self._paleta.get("cor_card", (35, 25, 60))
         cor_texto = self._paleta.get("cor_tag", (140, 130, 180))
 
@@ -381,7 +381,7 @@ def _pdf_page_secao(
     pdf.ln(12)
 
     pdf.set_font("DejaVu", "", 11)
-    pdf.set_text_color(200, 195, 220)
+    pdf.set_text_color(170, 165, 200)
 
     # Processar parágrafos
     paragrafos = conteudo.split("\n")
