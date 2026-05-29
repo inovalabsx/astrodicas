@@ -9,6 +9,7 @@ Fluxo vendável simplificado:
   6. Gera o mapa personalizado
 """
 import logging
+import os
 from datetime import date, datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -33,6 +34,109 @@ from src.vendas_bot.models_vendas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _resolver_tipo_mapa_do_assinante(assinante_id: int) -> str:
+    """Resolve tipo de mapa a entregar com base no pagamento/compra recente."""
+    from src.database import SessionLocal
+    from src.database.models import Compra, Pagamento
+
+    with SessionLocal() as session:
+        compra = (
+            session.query(Compra)
+            .filter(Compra.assinante_id == assinante_id, Compra.ativo == True)
+            .order_by(Compra.criado_em.desc())
+            .first()
+        )
+        if compra and compra.produto:
+            produto = str(compra.produto).lower()
+            if produto in {"mapa_astral", "astral"}:
+                return "astral"
+            if produto in {"mapa_sinastria", "sinastria"}:
+                return "sinastria"
+            if produto in {"mapa_carreira", "carreira"}:
+                return "carreira"
+            if produto in {"mapa_prosperidade", "prosperidade"}:
+                return "prosperidade"
+            if produto in {"mapa_sinastria_sem", "sinastria_sem"}:
+                return "sinastria_sem"
+
+        pag = (
+            session.query(Pagamento)
+            .filter(Pagamento.assinante_id == assinante_id)
+            .order_by(Pagamento.criado_em.desc())
+            .first()
+        )
+
+    if pag and pag.tipo:
+        tipo = str(pag.tipo).lower()
+        if tipo.startswith("mapa_"):
+            tipo = tipo.removeprefix("mapa_")
+        if tipo in {"astral", "sinastria", "carreira", "prosperidade", "sinastria_sem"}:
+            return tipo
+
+    return "astral"
+
+
+async def _gerar_e_enviar_mapa_premium(update: Update, context, assinante) -> bool:
+    """Gera e envia PDF premium real para o cliente no fluxo de produção."""
+    from src.vendas_bot.mapa_premium import gerar_mapa_premium
+
+    tipo = _resolver_tipo_mapa_do_assinante(assinante.id)
+    nome = (assinante.primeiro_nome or update.effective_user.first_name or "Cliente").strip()
+    data_nasc = assinante.data_nascimento
+    hora_nasc = assinante.hora_nascimento or "12:00"
+    cidade = assinante.cidade_nascimento or "São Paulo"
+    signo_nome = context.user_data.get("signo_nome", "Peixes")
+
+    await update.message.reply_text(
+        f"🛠️ Gerando seu PDF premium ({tipo})... pode levar alguns minutinhos."
+    )
+
+    pdf_path = gerar_mapa_premium(
+        nome=nome,
+        signo=signo_nome,
+        data_nascimento=data_nasc,
+        hora_nascimento=hora_nasc,
+        cidade=cidade,
+        tipo=tipo,
+    )
+
+    if not pdf_path or not os.path.exists(pdf_path):
+        await update.message.reply_text(
+            "⚠️ Deu erro na geração agora. Vou tentar de novo automaticamente..."
+        )
+        pdf_path = gerar_mapa_premium(
+            nome=nome,
+            signo=signo_nome,
+            data_nascimento=data_nasc,
+            hora_nascimento=hora_nasc,
+            cidade=cidade,
+            tipo=tipo,
+        )
+
+    if not pdf_path or not os.path.exists(pdf_path):
+        logger.error("Falha ao gerar mapa premium após retry")
+        await update.message.reply_text(
+            "❌ Não consegui gerar seu mapa agora. Já deixei sinalizado pra equipe resolver já."
+        )
+        return False
+
+    with open(pdf_path, "rb") as f:
+        await context.bot.send_document(
+            chat_id=update.effective_user.id,
+            document=f,
+            filename=os.path.basename(pdf_path),
+            caption="✨ Seu Mapa Premium chegou!",
+            read_timeout=180,
+            write_timeout=180,
+            connect_timeout=60,
+            pool_timeout=60,
+        )
+
+    await update.message.reply_text("✅ Pronto! Te entreguei o PDF premium completo aqui no chat.")
+    return True
+
 
 # Estados pós-pagamento (coleta de dados)
 (DADOS_NOME, DADOS_NASC, DADOS_HORA, DADOS_CIDADE) = range(10, 14)
@@ -574,10 +678,20 @@ async def receber_dados_cidade(update: Update, context):
         f"às {context.user_data.get('hora_nascimento', '12:00')}\n"
         f"📍 *Cidade:* {cidade}\n\n"
         "🔮 *Seu Mapa Astral personalizado está sendo preparado...*\n\n"
-        "Em breve você vai receber tudo aqui no chat! 🌙\n"
-        "E todo dia seu horóscopo personalizado vai chegar direto pra você. 🪐\n\n"
-        "✨🌟✨🌟✨🌟✨🌟✨🌟✨🌟✨\n\n"
-        "Bem-vindo ao *Plano Lua*! 🌙🎉"
+        "✨🌟✨🌟✨🌟✨🌟✨🌟✨🌟✨"
+    )
+
+    try:
+        await _gerar_e_enviar_mapa_premium(update, context, assinante)
+    except Exception as e:
+        logger.exception(f"Erro ao gerar/enviar mapa premium no fluxo real: {e}")
+        await update.message.reply_text(
+            "❌ Tive um erro inesperado ao entregar seu PDF. Já registrei aqui pra corrigir."
+        )
+
+    await update.message.reply_text(
+        "Bem-vindo ao *Plano Lua*! 🌙🎉\n"
+        "Todo dia seu horóscopo personalizado vai chegar direto pra você. 🪐"
     )
 
     context.user_data.clear()

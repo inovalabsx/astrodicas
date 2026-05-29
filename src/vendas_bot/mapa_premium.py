@@ -20,9 +20,11 @@ import json
 import logging
 import os
 import math
+import time
 from datetime import date, datetime
 from typing import Optional
 from urllib import request as urllib_request
+from urllib.error import HTTPError, URLError
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -143,7 +145,7 @@ def _gerar_secoes_llm(
     cidade: str,
     tipo: str,
 ) -> Optional[list[dict]]:
-    """Gera seções estruturadas via LLM (OmniRoute)."""
+    """Gera seções estruturadas via LLM (OmniRoute) com retry obrigatório."""
     if not settings.ominiroute_api_key:
         logger.warning("OMINIROUTE_API_KEY ausente — usando fallback")
         return None
@@ -196,44 +198,64 @@ def _gerar_secoes_llm(
         method="POST",
     )
 
-    try:
-        with urllib_request.urlopen(req, timeout=180) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            content = result["choices"][0]["message"]["content"]
-            data = json.loads(content)
-            secoes = data.get("secoes") if isinstance(data, dict) else None
-            if not isinstance(secoes, list):
-                logger.warning("LLM retornou formato inválido (sem lista de seções)")
-                return None
+    max_tentativas = 3
+    backoff_segundos = 2
 
-            normalizadas = []
-            for i, s in enumerate(secoes, start=1):
-                if not isinstance(s, dict):
-                    continue
-                titulo = str(s.get("titulo", "")).strip()
-                subtitulo = str(s.get("subtitulo", "")).strip()
-                conteudo = str(s.get("conteudo", "")).strip()
-                ordem = s.get("ordem", i)
-                try:
-                    ordem = int(ordem)
-                except Exception:
-                    ordem = i
-                if not titulo or not conteudo:
-                    continue
-                normalizadas.append({
-                    "titulo": titulo,
-                    "subtitulo": subtitulo or "",
-                    "ordem": ordem,
-                    "conteudo": conteudo,
-                })
+    for tentativa in range(1, max_tentativas + 1):
+        try:
+            with urllib_request.urlopen(req, timeout=180) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+                content = result["choices"][0]["message"]["content"]
+                data = json.loads(content)
+                secoes = data.get("secoes") if isinstance(data, dict) else None
+                if not isinstance(secoes, list):
+                    raise ValueError("LLM retornou formato inválido (sem lista de seções)")
 
-            if len(normalizadas) < 10:
-                logger.warning(f"LLM retornou poucas seções ({len(normalizadas)}) — usando fallback")
-                return None
-            return normalizadas
-    except Exception as e:
-        logger.warning(f"Erro na chamada LLM (mapa premium): {e}")
-        return None
+                normalizadas = []
+                for i, s in enumerate(secoes, start=1):
+                    if not isinstance(s, dict):
+                        continue
+                    titulo = str(s.get("titulo", "")).strip()
+                    subtitulo = str(s.get("subtitulo", "")).strip()
+                    conteudo = str(s.get("conteudo", "")).strip()
+                    ordem = s.get("ordem", i)
+                    try:
+                        ordem = int(ordem)
+                    except Exception:
+                        ordem = i
+                    if not titulo or not conteudo:
+                        continue
+                    normalizadas.append({
+                        "titulo": titulo,
+                        "subtitulo": subtitulo or "",
+                        "ordem": ordem,
+                        "conteudo": conteudo,
+                    })
+
+                if len(normalizadas) < 10:
+                    raise ValueError(f"LLM retornou poucas seções ({len(normalizadas)})")
+
+                logger.info(f"LLM premium ok na tentativa {tentativa}/{max_tentativas}")
+                return normalizadas
+
+        except (HTTPError, URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as e:
+            logger.warning(
+                f"Erro LLM tentativa {tentativa}/{max_tentativas} (mapa premium): {e}"
+            )
+            if tentativa < max_tentativas:
+                time.sleep(backoff_segundos * tentativa)
+                continue
+            return None
+        except Exception as e:
+            logger.warning(
+                f"Erro inesperado LLM tentativa {tentativa}/{max_tentativas} (mapa premium): {e}"
+            )
+            if tentativa < max_tentativas:
+                time.sleep(backoff_segundos * tentativa)
+                continue
+            return None
+
+    return None
 
 from fpdf import FPDF
 
