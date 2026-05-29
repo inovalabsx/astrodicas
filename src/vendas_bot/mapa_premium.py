@@ -239,8 +239,32 @@ def _gerar_secoes_llm(
     for tentativa in range(1, max_tentativas + 1):
         try:
             with urllib_request.urlopen(req, timeout=180) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                content = result["choices"][0]["message"].get("content", "")
+                raw_txt = resp.read().decode("utf-8", "ignore")
+
+                # Alguns gateways podem responder em SSE (data: ...), mesmo sem stream explícito.
+                # Nesse caso, remontamos o texto a partir dos chunks delta.content.
+                if raw_txt.lstrip().startswith("data:"):
+                    partes = []
+                    for linha in raw_txt.splitlines():
+                        l = linha.strip()
+                        if not l.startswith("data:"):
+                            continue
+                        payload_linha = l[5:].strip()
+                        if not payload_linha or payload_linha == "[DONE]":
+                            continue
+                        try:
+                            chunk = json.loads(payload_linha)
+                        except Exception:
+                            continue
+                        delta = (((chunk.get("choices") or [{}])[0]).get("delta") or {})
+                        pedaco = delta.get("content")
+                        if pedaco:
+                            partes.append(str(pedaco))
+                    content = "".join(partes)
+                else:
+                    result = json.loads(raw_txt)
+                    content = result["choices"][0]["message"].get("content", "")
+
                 normalizadas = _parse_markdown_secoes(str(content))
 
                 if len(normalizadas) < 10:
