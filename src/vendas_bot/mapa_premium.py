@@ -161,7 +161,7 @@ def _gerar_secoes_llm(
         "Formato obrigatório por seção:\n"
         "## <título da seção>\n"
         "### <subtítulo curto>\n"
-        "<conteúdo da seção em 3-6 parágrafos>\n\n"
+        "<conteúdo da seção em 4-7 parágrafos, com boa densidade e exemplos práticos>\n\n"
         f"Gere exatamente {qtd_secoes} seções. "
         "Cada seção deve ter conteúdo consistente, específico e útil, em português-BR natural. "
         "Não repetir frases entre seções."
@@ -597,48 +597,48 @@ def _pdf_page_sumario(pdf: FPDFPremium, secoes: list, paleta: dict, nome: str, t
     pdf.add_page()
     w, h = 210, 297
 
-    # Header maior pra caber o nome
-    header_h = 50
+    # Header mais compacto para garantir o índice em uma página
+    header_h = 42
     pdf.set_fill_color(*paleta["cor_principal"])
     pdf.rect(0, 0, w, header_h, style='F')
 
-    pdf.set_font("DejaVu", "B", 20)
+    pdf.set_font("DejaVu", "B", 18)
     pdf.set_text_color(*paleta["cor_texto"])
-    pdf.set_xy(15, 8)
-    pdf.cell(0, 12, f"{paleta['icone_titulo']} Índice do seu Mapa", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_xy(15, 7)
+    pdf.cell(0, 10, f"{paleta['icone_titulo']} Índice do seu Mapa", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_font("DejaVu", "", 10)
+    pdf.set_font("DejaVu", "", 9)
     pdf.set_text_color(*paleta["cor_destaque"])
-    pdf.cell(0, 6, f"{TIPO_NOMES.get(tipo, tipo)} — {nome}",
+    pdf.cell(0, 5, f"{TIPO_NOMES.get(tipo, tipo)} — {nome}",
              new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_y(header_h + 8)
+    pdf.set_y(header_h + 5)
 
     # ── Lista de seções (FUNDO ESCURO + TEXTO CLARO) ─────────────────
     for idx, s in enumerate(sorted(secoes, key=lambda x, fallback=999: x.get("ordem", fallback))):
         pdf.set_x(18)
 
-        # Card mais compacto: altura 14 em vez de 18
+        # Card compacto para evitar quebra desnecessária do índice
         pdf.set_fill_color(*paleta["cor_card"])
         pdf.set_draw_color(*paleta["cor_linha"])
         y_card = pdf.get_y()
-        pdf.rect(16, y_card, w - 32, 14, style='DF')  # DF = fill + draw
+        pdf.rect(16, y_card, w - 32, 12, style='DF')  # DF = fill + draw
 
         # Título
-        pdf.set_font("DejaVu", "B", 10)
+        pdf.set_font("DejaVu", "B", 9)
         pdf.set_text_color(*paleta["cor_texto"])
-        pdf.set_xy(20, y_card + 1)
-        pdf.cell(0, 7, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
+        pdf.set_xy(20, y_card + 0.5)
+        pdf.cell(0, 6, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
                  new_x="LMARGIN", new_y="NEXT")
 
         # Subtítulo
-        pdf.set_font("DejaVu", "", 8)
+        pdf.set_font("DejaVu", "", 7)
         pdf.set_text_color(*paleta["cor_tag"])
-        pdf.set_xy(26, y_card + 7)
-        pdf.cell(0, 6, f"{s.get('subtitulo', '')}",
+        pdf.set_xy(26, y_card + 6)
+        pdf.cell(0, 5, f"{s.get('subtitulo', '')}",
                  new_x="LMARGIN", new_y="NEXT")
 
-        pdf.ln(4)
+        pdf.ln(2)
 
 
 def _pdf_page_roda(pdf: FPDFPremium, roda_path: str, assinatura: str):
