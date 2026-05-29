@@ -3,7 +3,7 @@
 import asyncio
 from datetime import datetime
 
-import pytz
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,7 +15,7 @@ TZ = settings.timezone  # America/Sao_Paulo
 
 def _now() -> datetime:
     """Retorna datetime com timezone do Brasil."""
-    return datetime.now(pytz.timezone(TZ))
+    return datetime.now(ZoneInfo(TZ))
 
 
 from src.scheduler.publicar import publicar
