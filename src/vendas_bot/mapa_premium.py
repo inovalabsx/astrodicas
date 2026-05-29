@@ -99,6 +99,21 @@ TIPO_NOMES = {
     "prosperidade": "Mapa da Prosperidade",
 }
 
+# ── Símbolos planetários (para exibir nas seções de interpretação) ──────────────
+
+PLANETAS_SIMBOLOS = {
+    "Sol": "☉",
+    "Lua": "☽",
+    "Mercúrio": "☿",
+    "Vênus": "♀",
+    "Marte": "♂",
+    "Júpiter": "♃",
+    "Saturno": "♄",
+    "Urano": "♅",
+    "Netuno": "♆",
+    "Plutão": "♇",
+}
+
 # ── Classe FPDF com footer automático ──────────────────────────────────────────
 
 from fpdf import FPDF
@@ -407,47 +422,48 @@ def _pdf_page_sumario(pdf: FPDFPremium, secoes: list, paleta: dict, nome: str, t
     pdf.add_page()
     w, h = 210, 297
 
-    # Header
+    # Header maior pra caber o nome
+    header_h = 50
     pdf.set_fill_color(*paleta["cor_principal"])
-    pdf.rect(0, 0, w, 40, style='F')
+    pdf.rect(0, 0, w, header_h, style='F')
 
     pdf.set_font("DejaVu", "B", 20)
     pdf.set_text_color(*paleta["cor_texto"])
-    pdf.set_xy(15, 10)
+    pdf.set_xy(15, 8)
     pdf.cell(0, 12, f"{paleta['icone_titulo']} Índice do seu Mapa", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_font("DejaVu", "", 11)
+    pdf.set_font("DejaVu", "", 10)
     pdf.set_text_color(*paleta["cor_destaque"])
     pdf.cell(0, 6, f"{TIPO_NOMES.get(tipo, tipo)} — {nome}",
              new_x="LMARGIN", new_y="NEXT")
 
-    pdf.ln(10)
+    pdf.set_y(header_h + 8)
 
     # ── Lista de seções (FUNDO ESCURO + TEXTO CLARO) ─────────────────
     for idx, s in enumerate(sorted(secoes, key=lambda x, fallback=999: x.get("ordem", fallback))):
-        pdf.set_x(20)
+        pdf.set_x(18)
 
-        # Card de fundo escuro + borda sutil
+        # Card mais compacto: altura 14 em vez de 18
         pdf.set_fill_color(*paleta["cor_card"])
         pdf.set_draw_color(*paleta["cor_linha"])
         y_card = pdf.get_y()
-        pdf.rect(18, y_card, w - 36, 18, style='DF')  # DF = fill + draw
+        pdf.rect(16, y_card, w - 32, 14, style='DF')  # DF = fill + draw
 
-        # Título da seção em texto CLARO
-        pdf.set_font("DejaVu", "B", 11)
+        # Título
+        pdf.set_font("DejaVu", "B", 10)
         pdf.set_text_color(*paleta["cor_texto"])
-        pdf.set_xy(22, y_card + 1)
-        pdf.cell(0, 8, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
+        pdf.set_xy(20, y_card + 1)
+        pdf.cell(0, 7, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
                  new_x="LMARGIN", new_y="NEXT")
 
-        # Subtítulo em tom mais claro
-        pdf.set_font("DejaVu", "", 9)
-        pdf.set_text_color(*paleta["cor_destaque"])
-        pdf.set_xy(28, y_card + 9)
-        pdf.cell(0, 7, f"{s.get('subtitulo', '')}",
+        # Subtítulo
+        pdf.set_font("DejaVu", "", 8)
+        pdf.set_text_color(*paleta["cor_tag"])
+        pdf.set_xy(26, y_card + 7)
+        pdf.cell(0, 6, f"{s.get('subtitulo', '')}",
                  new_x="LMARGIN", new_y="NEXT")
 
-        pdf.ln(6)
+        pdf.ln(4)
 
 
 def _pdf_page_roda(pdf: FPDFPremium, roda_path: str, assinatura: str):
@@ -459,14 +475,13 @@ def _pdf_page_roda(pdf: FPDFPremium, roda_path: str, assinatura: str):
     pdf.set_fill_color(*pdf._paleta["cor_fundo"])
     pdf.rect(0, 0, w, h, style='F')
 
-    # Inserir roda centralizada
-    # Imagem é ~1200x1200, redimensionar pra ~160mm no lado maior
-    img_size = 160
+    # Inserir roda centralizada — MAIOR (185mm)
+    img_size = 185
     x_offset = (w - img_size) / 2
-    pdf.image(roda_path, x=x_offset, y=30, w=img_size, h=img_size)
+    pdf.image(roda_path, x=x_offset, y=15, w=img_size, h=img_size)
 
     # Assinatura abaixo
-    pdf.set_y(200)
+    pdf.set_y(215)
     pdf.set_font("DejaVu", "", 16)
     pdf.set_text_color(*pdf._paleta["cor_destaque"])
     pdf.cell(0, 12, assinatura, new_x="LMARGIN", new_y="NEXT", align="C")
@@ -499,26 +514,38 @@ def _pdf_page_secao(
     margem_dir = 18
     largura_texto = w - margem_esq - margem_dir
 
-    # ── Header ────────────────────────────────────────────────────────────
+    # ── Header com símbolo planetário ────────────────────────────────────────
     header_h = 35
     pdf.set_fill_color(*paleta["cor_principal"])
     pdf.rect(0, 0, w, header_h, style='F')
 
-    pdf.set_font("DejaVu", "B", 18)
+    # Extrair símbolo planetário do título
+    simb_planeta = ""
+    for nome_planeta, simb in PLANETAS_SIMBOLOS.items():
+        if titulo.startswith(nome_planeta):
+            simb_planeta = simb + " "
+            break
+
+    pdf.set_font("DejaVu", "B", 20)
     pdf.set_text_color(*paleta["cor_texto"])
     pdf.set_xy(15, 10)
-    pdf.cell(0, 10, f"{paleta['icone_titulo']} {titulo}",
+    pdf.cell(0, 12, f"{paleta['icone_titulo']} {simb_planeta}{titulo}",
              new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_font("DejaVu", "", 10)
+    pdf.set_font("DejaVu", "", 11)
     pdf.set_text_color(*paleta["cor_destaque"])
     pdf.cell(0, 5, subtitulo, new_x="LMARGIN", new_y="NEXT")
 
     # ── Conteúdo ──────────────────────────────────────────────────────────
     pdf.ln(12)
 
-    pdf.set_font("DejaVu", "", 11)
-    pdf.set_text_color(170, 165, 200)
+    pdf.set_font("DejaVu", "", 13)
+    pdf.set_text_color(120, 115, 150)
+
+    # Substituir nomes de planetas por símbolo + nome no corpo
+    for nome_planeta, simb in PLANETAS_SIMBOLOS.items():
+        # Só substitui palavras inteiras (com boundaries)
+        conteudo = conteudo.replace(f" {nome_planeta} ", f" {simb}{nome_planeta} ")
 
     # Processar parágrafos
     paragrafos = conteudo.split("\n")
@@ -529,11 +556,11 @@ def _pdf_page_secao(
     espaco_util = h - header_h - footer_reserve - pdf.get_y() + header_h
 
     # Estimar linhas
-    chars_por_linha = 70
+    chars_por_linha = 65
     linhas = sum(max(1, len(p) // chars_por_linha + 1) for p in paragrafos)
     linhas += len(paragrafos) - 1  # espaços entre parágrafos
 
-    lh = 7
+    lh = 8
     altura_estimada = linhas * lh
 
     # Distribuir espaço extra entre parágrafos se conteúdo for muito curto
@@ -549,8 +576,6 @@ def _pdf_page_secao(
         pdf.multi_cell(largura_texto, lh, par)
         if i < len(paragrafos) - 1:
             pdf.ln(3 + espaco_extra_par)
-
-
 def _gerar_rodape_premium(pdf: FPDFPremium, paleta: dict, paginas: list):
     """Adiciona página final com mensagem premium."""
     pdf.add_page()
@@ -663,7 +688,7 @@ def gerar_mapa_premium(
         if not secoes or not isinstance(secoes, list) or len(secoes) < 8:
             # Fallback completo — textos EXPANDIDOS (300+ palavras cada)
             secoes = _gerar_fallback_completo(
-                nome, signo, ascendente, cidade
+                nome, signo, ascendente, cidade, tipo
             )
 
         # ── 5. Montar PDF com FPDFPremium ─────────────────────────────────
@@ -721,295 +746,549 @@ def _gerar_fallback_completo(
     signo: str,
     ascendente: dict,
     cidade: str,
+    tipo: str = "astral",
 ) -> list[dict]:
-    """Gera fallback com textos LONGOS (300+ palavras) para preencher as páginas."""
-    return [
-        {
-            "titulo": "Introdução",
-            "subtitulo": "Sua essência cósmica",
-            "ordem": 1,
-            "conteudo": (
-                f"Querida {nome}, seu Mapa Astral é um retrato do céu no momento exato do seu nascimento. "
-                f"Ele revela não apenas quem você é, mas também quem você pode se tornar. Cada planeta, "
-                f"cada signo e cada casa astrológica contam uma parte da sua história cósmica, uma história "
-                f"que começou a ser escrita muito antes de você nascer. Quando o universo se alinhou para "
-                f"recebê-lo, cada estrela e cada planeta ocupavam posições únicas que influenciam diretamente "
-                f"sua personalidade, seus talentos, seus desafios e seu propósito de vida.\n\n"
-                f"Com Sol em {signo}, você carrega a sensibilidade e a intuição características deste signo "
-                f"de água. Sua alma é profunda como o oceano e suas emoções fluem com a intensidade das marés. "
-                f"Seu ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}° adiciona uma camada "
-                f"extra de personalidade que molda como você se apresenta ao mundo e como os outros percebem "
-                f"sua presença. Esta combinação única faz de você uma pessoa complexa, misteriosa e "
-                f"profundamente sensível às energias ao seu redor.\n\n"
-                f"Este mapa foi calculado com precisão astronômica para a cidade de {cidade} e reflete o céu "
-                f"no momento exato do seu nascimento. Ao longo destas páginas, você encontrará interpretações "
-                f"detalhadas de cada aspecto da sua carta natal, desde a posição do Sol até os aspectos mais "
-                f"sutis entre os planetas. Cada informação foi preparada com carinho para ajudar você a se "
-                f"conhecer melhor e a navegar sua jornada com mais consciência e propósito. Que esta leitura "
-                f"seja uma ferramenta de autoconhecimento e transformação na sua vida.\n\n"
-                f"O Mapa Astral não é apenas uma ferramenta de adivinhação — é um guia de autoconhecimento "
-                f"que revela seus padrões emocionais, seus talentos naturais e os desafios que você veio "
-                f"superar nesta vida. Cada planeta no seu mapa representa uma parte de você: o Sol mostra "
-                f"sua identidade, a Lua revela suas emoções, Mercúrio sua comunicação, Vênus seu amor, "
-                f"Marte sua energia. Juntos, eles formam um retrato completo da sua alma.\n\n"
-                f"Ao ler este documento, lembre-se de que você não é apenas um produto dos astros. Você "
-                f"tem livre arbítrio e pode escolher como expressar cada energia do seu mapa. O céu "
-                f"oferece possibilidades, mas você decide como usá-las. Que esta jornada de autoconhecimento "
-                f"seja transformadora e iluminadora para você."
-            ),
-        },
-        {
-            "titulo": "Sol — Sua Essência",
-            "subtitulo": "O que te move",
-            "ordem": 2,
-            "conteudo": (
-                f"O Sol no mapa astral representa sua essência mais profunda, sua identidade central, aquilo "
-                f"que você veio ser neste mundo. É o núcleo da sua personalidade, a faísca divina que ilumina "
-                f"seu caminho e define sua expressão mais autêntica. Quando alguém pensa em você, é a energia "
-                f"do seu Sol que sente primeiro, mesmo sem saber explicar.\n\n"
-                f"Com o Sol em {signo}, sua essência é marcada pela profundidade emocional e pela conexão com "
-                f"o mundo interior. Você é guiado pela intuição e possui uma sensibilidade que poucos "
-                f"compreendem. Sua força está na capacidade de sentir o que outros não percebem, transformando "
-                f"emoção em sabedoria. Você não vive na superfície das coisas — sua alma busca o significado "
-                f"oculto em cada experiência, cada relação, cada momento.\n\n"
-                f"As pessoas com esta posição solar têm uma memória emocional poderosa e uma capacidade única "
-                f"de criar laços profundos. Você protege seu coração com carinho, mas quando confia, se entrega "
-                f"com intensidade e lealdade. Seu propósito de vida está ligado à sua capacidade de cuidar, "
-                f"de nutrir e de transformar emoções em arte, cura ou sabedoria. O mundo precisa da sua "
-                f"intensidade e da sua coragem de sentir profundamente.\n\n"
-                f"O Sol no seu mapa também fala sobre sua vitalidade e sua força criativa. O brilho único "
-                f"que você traz ao mundo não se compara ao de ninguém, e a jornada da sua vida é justamente "
-                f"descobrir como expressar esse brilho da forma mais autêntica possível. Quando você se "
-                f"permite brilhar, inspira os outros a fazerem o mesmo. Seu Sol pede que você honre quem "
-                f"você realmente é, sem se encolher para caber em expectativas alheias. O universo ganha "
-                f"cor quando você se mostra em toda a sua verdade."
-            ),
-        },
-        {
-            "titulo": "Lua — Suas Emoções",
-            "subtitulo": "Como você sente",
-            "ordem": 3,
-            "conteudo": (
-                "A Lua no mapa astral governa suas emoções, seu mundo interior, sua forma de reagir "
-                "instintivamente às situações da vida. Ela revela como você busca conforto, segurança e "
-                "acolhimento. Enquanto o Sol mostra sua identidade consciente, a Lua revela a alma que "
-                "existe por trás da máscara que você mostra ao mundo.\n\n"
-                "Sua vida emocional é rica e intensa, com uma necessidade profunda de segurança afetiva. "
-                "Você se nutre de momentos de conexão genuína e silêncio contemplativo. Quando algo te "
-                "mexe por dentro, você sente como uma onda que toma conta de todo o seu ser. Sua intuição "
-                "é aguçada e muitas vezes você sabe como as pessoas estão se sentindo antes mesmo delas "
-                "dizerem uma palavra.\n\n"
-                "O desafio da Lua no seu mapa é aprender a lidar com a intensidade das próprias emoções "
-                "sem se deixar afogar por elas. Você precisa de rituais de autocuidado, de momentos de "
-                "solidão criativa e de um ambiente seguro para processar seus sentimentos. A Lua também "
-                "revela sua relação com a figura materna e como você cuida dos outros. Sua capacidade de "
-                "acolher e nutrir é um dos seus maiores dons, mas lembre-se de que você também precisa "
-                "ser cuidada. Criar um lar interior seguro é tão importante quanto ter um lar físico onde "
-                "seu coração se sinta em paz.\n\n"
-                "A Lua rege também seus hábitos, sua memória emocional e sua forma de lidar com o "
-                "passado. As experiências da infância deixaram marcas profundas em sua psique, moldando "
-                "sua forma de amar e de confiar. Honrar sua história, com todas as suas dores e alegrias, "
-                "é parte do caminho de cura que a Lua te convida a percorrer. Quando você se permite "
-                "sentir sem julgamento, a Lua se torna sua maior aliada — guiando suas emoções como "
-                "as marés guiam o oceano, com sabedoria e fluidez naturais."
-            ),
-        },
-        {
-            "titulo": "Ascendente — Sua Primeira Impressão",
-            "subtitulo": "Como os outros te veem",
-            "ordem": 4,
-            "conteudo": (
-                f"O Ascendente é a máscara que você usa ao encontrar o mundo pela primeira vez. É a primeira "
-                f"impressão que as pessoas têm de você, a energia que você projeta antes mesmo de falar. "
-                f"Enquanto o Sol é quem você é por dentro, o Ascendente é como você se apresenta. É a pele "
-                f"da sua alma, a embalagem do seu espírito, o filtro através do qual o mundo te enxerga.\n\n"
-                f"Com ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}°, você projeta uma "
-                f"imagem que cativa e intriga. As pessoas te percebem como alguém profundo e magnético antes "
-                f"mesmo de conhecerem sua verdadeira essência. Há algo em você que chama atenção sem que você "
-                f"precise fazer esforço — um brilho natural que atrai olhares e desperta curiosidade.\n\n"
-                f"Seu Ascendente também influencia sua aparência física e seu estilo pessoal. É comum que "
-                f"pessoas com este ascendente tenham olhos expressivos e uma presença que ocupa o espaço "
-                f"sem precisar de palavras. Você tem um jeito único de se movimentar pelo mundo, uma "
-                f"assinatura energética que fica gravada na memória de quem te encontra. À medida que você "
-                f"amadurece, aprende a integrar melhor a energia do seu Ascendente com a do seu Sol, "
-                f"tornando-se cada vez mais autêntica e completa.\n\n"
-                f"O Ascendente é o presente que você dá ao mundo quando chega — e com o tempo, ele se "
-                f"transforma em quem você está destinada a ser. É interessante notar como seu Ascendente "
-                f"pode surpreender até você mesma: muitas vezes, as pessoas enxergam em você qualidades "
-                f"que você ainda não descobriu em si mesma. Preste atenção nos elogios que recebe com "
-                f"frequência — eles são pistas do seu Ascendente em ação. À medida que você cresce e "
-                f"evolui, a diferença entre seu Sol e seu Ascendente diminui, e você se torna uma versão "
-                f"cada vez mais integrada e poderosa de si mesma."
-            ),
-        },
-        {
-            "titulo": "Mercúrio — Sua Comunicação",
-            "subtitulo": "Como você pensa e fala",
-            "ordem": 5,
-            "conteudo": (
-                "Mercúrio rege sua mente, sua comunicação, sua forma de processar informações e de se "
-                "expressar. É o planeta que define como você aprende, como ensina, como escreve e como "
-                "conversa. Ele mostra o estilo da sua inteligência e como você organiza seus pensamentos "
-                "para transformá-los em palavras e ações.\n\n"
-                "Sua mente é ágil e intuitiva, captando nuances que passam despercebidas pela maioria das "
-                "pessoas. Você se comunica com sensibilidade e prefere conversas que toquem a alma. "
-                "Palavras têm poder para você, e sabe usá-las com cuidado e precisão. Sua comunicação não "
-                "é superficial — você busca o significado por trás das palavras, o não dito que existe "
-                "entre uma frase e outra.\n\n"
-                "Você tem talento para escrever, para criar narrativas que envolvem e cativam. Sua mente "
-                "funciona como uma esponja, absorvendo informações do ambiente e transformando-as em "
-                "insights profundos. Às vezes você pode ser reservada, guardando seus pensamentos mais "
-                "íntimos para poucos, mas quando compartilha, suas palavras carregam peso e verdade. "
-                "O desafio de Mercúrio no seu mapa é equilibrar a profundidade do seu pensamento com a "
-                "clareza da comunicação.\n\n"
-                "Seu dom é traduzir o complexo em simples, o profundo em acessível, transformando "
-                "sabedoria em palavras que tocam corações. Com Mercúrio bem posicionado, você tem "
-                "facilidade para aprender idiomas, para escrever de forma cativante e para se conectar "
-                "com pessoas através de conversas significativas. Invista em desenvolver sua voz única "
-                "— o mundo precisa ouvir o que você tem a dizer. Sua palavra tem poder de cura e de "
-                "transformação quando usada com consciência."
-            ),
-        },
-        {
-            "titulo": "Vênus — Seu Amor",
-            "subtitulo": "Como você ama",
-            "ordem": 6,
-            "conteudo": (
-                "Vênus é o planeta do amor, da beleza, dos afetos e dos valores. Ele revela como você ama, "
-                "o que busca em um relacionamento, como expressa carinho e o que considera bonito e "
-                "valioso na vida. Vênus também fala sobre sua relação com o dinheiro, com o prazer e com "
-                "as coisas que trazem alegria ao seu coração.\n\n"
-                "No amor, você busca conexão profunda e significado. Não se contenta com superficialidades "
-                "— precisa de alguém que compreenda sua complexidade emocional. Sua lealdade é imensa "
-                "quando encontra uma parceria que valoriza a alma tanto quanto o coração. Para você, "
-                "amor não é apenas sentimento — é compromisso, é presença, é escolha diária.\n\n"
-                "Você valoriza gestos sinceros mais do que grandes declarações. Um olhar que entende, um "
-                "silêncio compartilhado, uma mão estendida no momento certo — é isso que faz seu coração "
-                "se sentir amado. Sua sensualidade é sutil mas intensa, e você se conecta através da "
-                "troca de energias sutis. O desafio de Vênus no seu mapa é não se fechar para o amor "
-                "por medo de se machucar.\n\n"
-                "Sua sensibilidade é seu maior presente nos relacionamentos, desde que você aprenda a "
-                "usá-la como ponte e não como muro. Ame com coragem, porque sua capacidade de amar "
-                "profundamente é um dos seus maiores dons. Vênus também rege sua relação com a beleza "
-                "e a arte — você tem um olhar apurado para o que é estético e harmonioso. Cultivar "
-                "espaços bonitos e momentos de prazer é essencial para seu bem-estar. Permita-se "
-                "receber tanto quanto dá, pois o amor floresce quando há equilíbrio entre entrega e "
-                "recepção. Você merece um amor que te veja por inteiro e que celebre cada parte de você."
-            ),
-        },
-        {
-            "titulo": "Marte — Sua Energia",
-            "subtitulo": "Como você age",
-            "ordem": 7,
-            "conteudo": (
-                "Marte rege sua energia, sua ação, sua força de vontade e como você luta pelo que quer. "
-                "É o planeta que mostra seu estilo de afirmação, sua raiva, sua paixão e sua libido. "
-                "Marte é o guerreiro interior que se levanta quando algo precisa ser conquistado ou "
-                "defendido. É a chama que acende quando você decide que algo é importante demais para "
-                "ser ignorado.\n\n"
-                "Sua energia é direcionada por emoções. Você age quando sente, e isso torna suas ações "
-                "poderosas e autênticas. Quando algo toca seu coração, você move montanhas. Não é do "
-                "tipo que faz as coisas pela metade — quando você se compromete, entrega tudo de si. "
-                "Sua força está na intensidade com que você se dedica às causas que abraça.\n\n"
-                "O desafio é canalizar essa força sem se deixar levar pela impulsividade. Marte no seu "
-                "mapa pede que você aprenda a agir com estratégia, não apenas com emoção. Sua raiva, "
-                "quando bem direcionada, pode ser um motor poderoso de transformação — use-a para "
-                "quebrar barreiras, não para construir muros. Você tem uma energia sexual magnética e "
-                "uma capacidade de sedução que vai além do físico.\n\n"
-                "Seu magnetismo pessoal é forte e as pessoas sentem sua presença quando você entra em "
-                "um ambiente. Marte te dá coragem para seguir seus instintos e lutar pelo que você "
-                "acredita. Aprender a direcionar essa energia de forma construtiva é uma das lições "
-                "mais importantes do seu mapa. Use sua garra para construir, para proteger, para criar. "
-                "Sua força interior é um presente que, quando bem cultivado, te leva a conquistar "
-                "qualquer objetivo que você realmente deseje. Não tenha medo de ser intensa — sua "
-                "intensidade é seu superpoder."
-            ),
-        },
-        {
-            "titulo": "Júpiter e Saturno",
-            "subtitulo": "Sorte e limitações",
-            "ordem": 8,
-            "conteudo": (
-                "Júpiter e Saturno são os planetas sociais que falam sobre sua expansão e seus limites. "
-                "Júpiter é o grande benéfico, o planeta da sorte, da abundância, da expansão e da "
-                "sabedoria. Ele mostra onde você encontra crescimento, onde a vida te presenteia com "
-                "oportunidades e como você busca significado e propósito. Júpiter é o professor que "
-                "abre portas e expande horizontes.\n\n"
-                "Júpiter no seu mapa traz expansão através da espiritualidade e do autoconhecimento. "
-                "Sua sorte está em confiar na intuição e buscar crescimento interior. Você atrai "
-                "oportunidades quando está alinhada com seu propósito mais profundo. A generosidade "
-                "é uma das suas marcas — você dá sem esperar receber, e o universo retorna em dobro. "
-                "Sua fé na vida, mesmo nos momentos difíceis, é seu maior trunfo.\n\n"
-                "Saturno, por outro lado, é o mestre das lições. Ele pede disciplina emocional, "
-                "estrutura e responsabilidade. Saturno no seu mapa mostra onde você precisa construir "
-                "fundações sólidas, onde a vida vai te testar para te fortalecer. Os desafios de "
-                "Saturno não são punições — são treinamentos para sua alma. Cada obstáculo que você "
-                "enfrenta desenvolve uma força que nada pode tirar de você.\n\n"
-                "O equilíbrio entre Júpiter e Saturno é uma das chaves do seu mapa. Júpiter te convida "
-                "a sonhar grande, a expandir seus horizontes, a confiar na abundância do universo. "
-                "Saturno te pede para construir bases sólidas para que esses sonhos se sustentem. "
-                "Juntos, eles formam a dupla perfeita: a fé que move montanhas e a disciplina que "
-                "constrói estradas. Honre os dois e encontrará o equilíbrio entre expansão e estrutura. "
-                "Lembre-se de que todo mestre Saturno tem seu presente: depois de cada lição aprendida, "
-                "você se torna mais forte, mais sábia e mais preparada para o próximo capítulo."
-            ),
-        },
-        {
-            "titulo": "Aspectos em Foco",
-            "subtitulo": "Conexões cósmicas",
-            "ordem": 9,
-            "conteudo": (
-                "Os aspectos são os ângulos que os planetas formam entre si no seu mapa astral. Eles "
-                "revelam como as diferentes partes da sua personalidade se relacionam, onde há harmonia "
-                "e onde há tensão criativa. Cada aspecto é uma conversa entre dois planetas, uma dança "
-                "cósmica que cria padrões únicos na sua personalidade. São as conexões invisíveis que "
-                "fazem de você quem você é.\n\n"
-                "Os aspectos entre seus planetas revelam dinâmicas importantes. Há tensões criativas que "
-                "impulsionam seu crescimento e harmonias que trazem dons naturais. As conjunções "
-                "intensificam as energias envolvidas, enquanto os trígonos trazem fluidez e talento "
-                "nato. As quadraturas e oposições são os pontos de crescimento — onde a vida te desafia "
-                "a evoluir e a encontrar equilíbrio entre forças opostas.\n\n"
-                "Os aspectos mais fortes do seu mapa mostram onde sua energia se concentra. São como "
-                "holofotes cósmicos iluminando áreas específicas da sua vida que pedem atenção e "
-                "desenvolvimento. Um aspecto tenso não é uma maldição — é um convite para crescer. "
-                "Um aspecto harmonioso não é uma garantia — é um talento que precisa ser cultivado.\n\n"
-                "A chave está em integrar essas energias opostas para encontrar equilíbrio e propósito. "
-                "Não se trata de eliminar as tensões, mas de aprender a dançar com elas. Cada aspecto "
-                "no seu mapa é uma ferramenta, um recurso que você pode usar para navegar a vida com "
-                "mais consciência. Os aspectos mais desafiadores são, frequentemente, seus maiores "
-                "presentes — são eles que te empurram para fora da zona de conforto e te fazem crescer. "
-                "Observe quais áreas da sua vida geram mais atrito e veja nisso não um problema, mas "
-                "um convite à evolução. O mapa astral não mostra um destino fixo, mas um potencial de "
-                "crescimento que só você pode realizar."
-            ),
-        },
-        {
-            "titulo": "Mensagem Final",
-            "subtitulo": "Seu caminho cósmico",
-            "ordem": 10,
-            "conteudo": (
-                f"{nome}, chegamos ao final desta jornada pelo seu Mapa Astral, mas seu caminho de "
-                f"autoconhecimento está apenas começando. Este documento é um mapa da sua alma, um guia "
-                f"para navegar as águas profundas da sua própria existência. Cada posição planetária, "
-                f"cada aspecto e cada casa revelam um pedaço do quebra-cabeça que é você.\n\n"
-                f"As estrelas no momento do seu nascimento desenharam um potencial único. Você não é "
-                f"apenas o produto dos astros — você é a consciência que os observa, a alma que os "
-                f"interpreta e a mão que escreve sua própria história. O mapa astral não é um destino "
-                f"fixo; é um mapa de possibilidades. Você pode escolher quais caminhos seguir, quais "
-                f"aspectos desenvolver e como expressar cada energia que recebeu ao nascer.\n\n"
-                f"A astrologia é uma ferramenta de autoconhecimento, não uma prisão. Use estas informações "
-                f"como um espelho para se enxergar melhor, como uma bússola para orientar suas escolhas "
-                f"e como um lembrete de que você é parte de algo maior. O cosmos vive em você, e você "
-                f"vive no cosmos. Cada passo que você dá em direção ao autoconhecimento é um passo em "
-                f"direção à sua verdade mais profunda.\n\n"
-                f"Continue explorando, continue perguntando, continue crescendo. O universo tem infinitas "
-                f"camadas de sabedoria para revelar, e você está exatamente onde precisa estar. Que os "
-                f"astros iluminem seu caminho e que sua jornada seja repleta de descobertas, amor e "
-                f"transformação. Lembre-se: o maior astrólogo que existe é você mesma, no seu silêncio "
-                f"interior, quando ouve a voz da sua própria alma. Confie nela, ela nunca te engana."
-            ),
-        },
-    ]
+    """Gera fallback com conteúdo TEMÁTICO conforme o tipo do mapa.
+    
+    Cada tipo tem seu foco e conjunto de seções reduzido pra evitar
+    páginas com 1 linha. Textos compactos (150-250 palavras).
+    """
+    if tipo == "sinastria":
+        return [
+            {
+                "titulo": "Introdução ao Amor",
+                "subtitulo": "A dança dos astros no amor",
+                "ordem": 1,
+                "conteudo": (
+                    f"{nome}, a Sinastria Amorosa revela como as energias celestes "
+                    f"dançam no amor. Mais do que um mapa individual, este é o "
+                    f"encontro de duas almas sob o mesmo céu, mostrando onde há "
+                    f"química, onde há desafio e onde o amor pode florescer com mais "
+                    f"intensidade. Cada planeta em contato conta uma história de desejo, "
+                    f"compreensão e crescimento mútuo.\n\n"
+                    f"Seu Sol em {signo} busca um amor que compreenda sua alma profunda. "
+                    f"Você não se satisfaz com relações superficiais — precisa de alguém "
+                    f"que mergulhe com você nas águas da emoção. Seu ascendente em "
+                    f"{ascendente['signo']} {ascendente['grau_signo']:.0f}° atrai "
+                    f"parceiros que se encantam pela sua aura magnética e misteriosa."
+                ),
+            },
+            {
+                "titulo": "Vênus — Seu Coração",
+                "subtitulo": "Como você ama e se entrega",
+                "ordem": 2,
+                "conteudo": (
+                    "Vênus no mapa de sinastria é a chave do amor romântico. Ele mostra "
+                    "como você seduz, o que valoriza numa parceria e como expressa "
+                    "carinho. No amor, sua entrega é profunda e leal. Você busca "
+                    "conexão de alma, não apenas companhia.\n\n"
+                    "Sua sensualidade é sutil e intensa. Um toque, um olhar, um gesto "
+                    "significam mais que mil palavras. Você se conecta através da energia "
+                    "e precisa de alguém que sinta o mesmo. O desafio é não se fechar "
+                    "por medo de se machucar — seu coração merece ser vivido."
+                ),
+            },
+            {
+                "titulo": "Lua — Conexão Emocional",
+                "subtitulo": "O que alimenta sua alma",
+                "ordem": 3,
+                "conteudo": (
+                    "A Lua na sinastria revela como você e seu parceiro se nutrem "
+                    "emocionalmente. É a compatibilidade mais íntima — onde vocês se "
+                    "entendem sem palavras. Se sua Lua se conecta bem com a do outro, "
+                    "há uma sensação de 'casa' juntos.\n\n"
+                    "Você busca segurança afetiva e acolhimento. Precisa de um parceiro "
+                    "que entenda seus silêncios, que respeite seus ciclos emocionais e "
+                    "que saiba estar presente mesmo quando não há o que dizer. A verdadeira "
+                    "conexão acontece no espaço entre as palavras."
+                ),
+            },
+            {
+                "titulo": "Marte — A Química",
+                "subtitulo": "Paixão e desejo",
+                "ordem": 4,
+                "conteudo": (
+                    "Marte na sinastria fala da química, da paixão e da atração física. "
+                    "É o planeta que acende o fogo entre duas pessoas, que cria a "
+                    "centelha que transforma amizade em amor. Sem uma boa conexão "
+                    "de Marte, a relação pode ser amorosa mas sem chamas.\n\n"
+                    "Sua energia amorosa é intensa e magnética. Você atrai parceiros "
+                    "que sentem sua presença fortemente. O desejo para você não é "
+                    "apenas físico — é energia que flui, é conexão vital. Quando "
+                    "ama, ama com corpo, mente e alma."
+                ),
+            },
+            {
+                "titulo": "União dos Astros",
+                "subtitulo": "Pontes entre os céus",
+                "ordem": 5,
+                "conteudo": (
+                    "A sinastria não é sobre encontrar o parceiro perfeito, mas sobre "
+                    "entender como duas almas podem crescer juntas. Cada aspecto "
+                    "entre os mapas revela uma oportunidade de aprendizado. As "
+                    "conexões harmoniosas trazem fluidez; as tensas trazem crescimento.\n\n"
+                    f"{nome}, o amor verdadeiro não elimina desafios — ele os transforma "
+                    "em pontes. Use este mapa como um guia para compreender a dança "
+                    "entre você e seu par. O que te desafia também te completa. No "
+                    "fim, o amor não é encontrar alguém perfeito, mas alguém que "
+                    "faça sentido na sua jornada."
+                ),
+            },
+        ]
+    elif tipo == "carreira":
+        return [
+            {
+                "titulo": "Introdução Profissional",
+                "subtitulo": "Seu propósito no mundo",
+                "ordem": 1,
+                "conteudo": (
+                    f"{nome}, seu Mapa da Carreira revela o caminho profissional "
+                    "que o céu desenhou para você. Mais do que escolher uma profissão, "
+                    "trata-se de descobrir como sua alma quer se expressar no mundo. "
+                    "O trabalho que te realiza é aquele que conecta seus talentos "
+                    "naturais com um propósito maior.\n\n"
+                    "Com Sol em {signo}, sua vocação está ligada à profundidade "
+                    "emocional, à psicologia, à arte ou à cura. Você não se realiza "
+                    "em trabalhos superficiais — precisa de significado. Seu "
+                    f"ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}° "
+                    "dá a você uma presença profissional marcante que abre portas."
+                ),
+            },
+            {
+                "titulo": "Vocação e Talento",
+                "subtitulo": "O que você veio fazer",
+                "ordem": 2,
+                "conteudo": (
+                    "Sua vocação está em áreas que exigem sensibilidade, intuição e "
+                    "conexão humana. Psicologia, astrologia, artes, terapia, "
+                    "aconselhamento — profissões que tocam a alma das pessoas. "
+                    "Você tem um dom natural para compreender o que os outros sentem "
+                    "e transformar essa compreensão em serviço.\n\n"
+                    "Seu talento também está na comunicação profunda e na capacidade "
+                    "de traduzir emoções em palavras ou arte. Escrever, criar, "
+                    "orientar — estas são suas ferramentas de realização profissional. "
+                    "O mercado precisa de pessoas que tragam alma para o trabalho."
+                ),
+            },
+            {
+                "titulo": "Saturno — Estrutura",
+                "subtitulo": "Construindo sua carreira",
+                "ordem": 3,
+                "conteudo": (
+                    "Saturno no mapa de carreira mostra onde você precisa construir "
+                    "disciplina e estrutura. O sucesso profissional não vem apenas "
+                    "do talento — vem da consistência, da responsabilidade e da "
+                    "capacidade de superar obstáculos.\n\n"
+                    "Seu caminho profissional pode ter desafios iniciais, mas cada "
+                    "dificuldade é um degrau. Você constrói carreira devagar mas com "
+                    "bases sólidas. Aos poucos, seu nome se torna referência. Não "
+                    "compare seu começo com o meio da jornada de ninguém."
+                ),
+            },
+            {
+                "titulo": "Júpiter — Expansão",
+                "subtitulo": "Oportunidades e crescimento",
+                "ordem": 4,
+                "conteudo": (
+                    "Júpiter mostra onde a sorte profissional te espera. Sua "
+                    "expansão vem através da espiritualidade aplicada ao trabalho, "
+                    "da conexão com pessoas que compartilham seus valores e da "
+                    "coragem de seguir sua intuição profissional.\n\n"
+                    "Invista em conhecimento, em redes de contato e em projetos que "
+                    "expandam seus horizontes. A abundância chega quando você "
+                    "trabalha alinhada ao seu propósito. O universo recompensa "
+                    "quem faz o que ama com dedicação e fé."
+                ),
+            },
+            {
+                "titulo": "Realização",
+                "subtitulo": "Seu legado profissional",
+                "ordem": 5,
+                "conteudo": (
+                    f"{nome}, a carreira dos seus sonhos não é um destino — é um "
+                    "caminho que se constrói dia após dia. Seu mapa mostra o "
+                    "potencial, mas a realização depende da sua coragem de seguir "
+                    "sua verdade profissional, mesmo quando o caminho parece incerto.\n\n"
+                    "O sucesso para você não é apenas dinheiro ou status. É sentir "
+                    "que seu trabalho faz diferença na vida das pessoas. É acordar "
+                    "sabendo que o que você faz importa. Persiga esse sentimento "
+                    "e o resto vem como consequência. O mundo precisa do seu dom único."
+                ),
+            },
+        ]
+    elif tipo == "prosperidade":
+        return [
+            {
+                "titulo": "Introdução à Prosperidade",
+                "subtitulo": "Abundância segundo o céu",
+                "ordem": 1,
+                "conteudo": (
+                    f"{nome}, o Mapa da Prosperidade não é apenas sobre dinheiro — "
+                    "é sobre abundância em todas as áreas da vida: amor, saúde, "
+                    "realização e, sim, prosperidade financeira. O céu mostra onde "
+                    "você pode florescer, desde que alinhada ao fluxo natural da "
+                    "sua energia.\n\n"
+                    f"Com Sol em {signo}, sua prosperidade vem da conexão com sua "
+                    "intuição e da capacidade de transformar emoção em valor. "
+                    "Você atrai abundância quando confia no seu tato e segue "
+                    f"seus impulsos criativos. Seu ascendente em {ascendente['signo']} "
+                    f"{ascendente['grau_signo']:.0f}° abre portas através da sua "
+                    "presença magnética e da sua capacidade de inspirar confiança."
+                ),
+            },
+            {
+                "titulo": "Júpiter — Sorte Financeira",
+                "subtitulo": "Onde a abundância te espera",
+                "ordem": 2,
+                "conteudo": (
+                    "Júpiter é o planeta da sorte e da expansão. No mapa da "
+                    "prosperidade, ele mostra onde o dinheiro flui com mais "
+                    "facilidade e onde você encontra oportunidades de crescimento "
+                    "financeiro. Sua sorte está em áreas que exigem sensibilidade "
+                    "e conexão humana.\n\n"
+                    "Invista em conhecimento, em parcerias e em projetos que "
+                    "expandem sua visão de mundo. A prosperidade chega quando "
+                    "você confia no fluxo da vida e se abre para receber. "
+                    "Sua generosidade natural atrai abundância — o que você "
+                    "dá ao universo retorna multiplicado."
+                ),
+            },
+            {
+                "titulo": "Saturno — Disciplina Financeira",
+                "subtitulo": "Base para o crescimento",
+                "ordem": 3,
+                "conteudo": (
+                    "Saturno no mapa da prosperidade mostra onde você precisa de "
+                    "disciplina com o dinheiro. A abundância verdadeira vem quando "
+                    "há equilíbrio entre ganhar, poupar e investir. Sem estrutura, "
+                    "o dinheiro vem e vai como água entre os dedos.\n\n"
+                    "Construa bases financeiras sólidas. Crie reservas, organize "
+                    "suas finanças e aprenda a administrar seus recursos com "
+                    "sabedoria. Cada real bem cuidado é uma semente plantada "
+                    "para o futuro. Prosperidade começa com consciência financeira."
+                ),
+            },
+            {
+                "titulo": "Vênus — Valor e Prazer",
+                "subtitulo": "Sua relação com o dinheiro",
+                "ordem": 4,
+                "conteudo": (
+                    "Vênus na prosperidade fala sobre sua relação com o dinheiro "
+                    "e com o prazer. Você tende a gastar com o que traz beleza "
+                    "e conforto para sua vida, mas precisa equilibrar isso com "
+                    "a construção de patrimônio.\n\n"
+                    "Seu valor não está no que você possui, mas no que você é. "
+                    "Quando você se reconhece como fonte de valor, o dinheiro "
+                    "flui naturalmente. Invista em você, no seu desenvolvimento "
+                    "e em experiências que alimentam sua alma. A verdadeira "
+                    "prosperidade é ter liberdade para viver com significado."
+                ),
+            },
+            {
+                "titulo": "Abundância Plena",
+                "subtitulo": "Receber com gratidão",
+                "ordem": 5,
+                "conteudo": (
+                    f"{nome}, a prosperidade que você busca já existe dentro de "
+                    "você. O dinheiro é apenas um reflexo da sua capacidade de "
+                    "criar valor para o mundo. Quando você trabalha alinhada ao "
+                    "seu propósito, a abundância se torna consequência natural.\n\n"
+                    "Confie no seu tato. Siga sua intuição financeira. Abra-se "
+                    "para receber sem culpa. Você merece prosperar. O universo "
+                    "não tem limites — os únicos limites estão na sua mente. "
+                    "Permita-se sonhar grande, agir com fé e receber com "
+                    "gratidão tudo o que a vida tem para te oferecer."
+                ),
+            },
+        ]
+    else:  # astral ou padrão
+        return [
+            {
+                "titulo": "Introdução",
+                "subtitulo": "Sua essência cósmica",
+                "ordem": 1,
+                "conteudo": (
+                    f"Querida {nome}, seu Mapa Astral é um retrato do céu no momento exato do seu nascimento. "
+                    f"Ele revela não apenas quem você é, mas também quem você pode se tornar. Cada planeta, "
+                    f"cada signo e cada casa astrológica contam uma parte da sua história cósmica, uma história "
+                    f"que começou a ser escrita muito antes de você nascer. Quando o universo se alinhou para "
+                    f"recebê-lo, cada estrela e cada planeta ocupavam posições únicas que influenciam diretamente "
+                    f"sua personalidade, seus talentos, seus desafios e seu propósito de vida.\n\n"
+                    f"Com Sol em {signo}, você carrega a sensibilidade e a intuição características deste signo "
+                    f"de água. Sua alma é profunda como o oceano e suas emoções fluem com a intensidade das marés. "
+                    f"Seu ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}° adiciona uma camada "
+                    f"extra de personalidade que molda como você se apresenta ao mundo e como os outros percebem "
+                    f"sua presença. Esta combinação única faz de você uma pessoa complexa, misteriosa e "
+                    f"profundamente sensível às energias ao seu redor.\n\n"
+                    f"Este mapa foi calculado com precisão astronômica para a cidade de {cidade} e reflete o céu "
+                    f"no momento exato do seu nascimento. Ao longo destas páginas, você encontrará interpretações "
+                    f"detalhadas de cada aspecto da sua carta natal, desde a posição do Sol até os aspectos mais "
+                    f"sutis entre os planetas. Cada informação foi preparada com carinho para ajudar você a se "
+                    f"conhecer melhor e a navegar sua jornada com mais consciência e propósito. Que esta leitura "
+                    f"seja uma ferramenta de autoconhecimento e transformação na sua vida.\n\n"
+                    f"O Mapa Astral não é apenas uma ferramenta de adivinhação — é um guia de autoconhecimento "
+                    f"que revela seus padrões emocionais, seus talentos naturais e os desafios que você veio "
+                    f"superar nesta vida. Cada planeta no seu mapa representa uma parte de você: o Sol mostra "
+                    f"sua identidade, a Lua revela suas emoções, Mercúrio sua comunicação, Vênus seu amor, "
+                    f"Marte sua energia. Juntos, eles formam um retrato completo da sua alma.\n\n"
+                    f"Ao ler este documento, lembre-se de que você não é apenas um produto dos astros. Você "
+                    f"tem livre arbítrio e pode escolher como expressar cada energia do seu mapa. O céu "
+                    f"oferece possibilidades, mas você decide como usá-las. Que esta jornada de autoconhecimento "
+                    f"seja transformadora e iluminadora para você."
+                ),
+            },
+            {
+                "titulo": "Sol — Sua Essência",
+                "subtitulo": "O que te move",
+                "ordem": 2,
+                "conteudo": (
+                    f"O Sol no mapa astral representa sua essência mais profunda, sua identidade central, aquilo "
+                    f"que você veio ser neste mundo. É o núcleo da sua personalidade, a faísca divina que ilumina "
+                    f"seu caminho e define sua expressão mais autêntica. Quando alguém pensa em você, é a energia "
+                    f"do seu Sol que sente primeiro, mesmo sem saber explicar.\n\n"
+                    f"Com o Sol em {signo}, sua essência é marcada pela profundidade emocional e pela conexão com "
+                    f"o mundo interior. Você é guiado pela intuição e possui uma sensibilidade que poucos "
+                    f"compreendem. Sua força está na capacidade de sentir o que outros não percebem, transformando "
+                    f"emoção em sabedoria. Você não vive na superfície das coisas — sua alma busca o significado "
+                    f"oculto em cada experiência, cada relação, cada momento.\n\n"
+                    f"As pessoas com esta posição solar têm uma memória emocional poderosa e uma capacidade única "
+                    f"de criar laços profundos. Você protege seu coração com carinho, mas quando confia, se entrega "
+                    f"com intensidade e lealdade. Seu propósito de vida está ligado à sua capacidade de cuidar, "
+                    f"de nutrir e de transformar emoções em arte, cura ou sabedoria. O mundo precisa da sua "
+                    f"intensidade e da sua coragem de sentir profundamente.\n\n"
+                    f"O Sol no seu mapa também fala sobre sua vitalidade e sua força criativa. O brilho único "
+                    f"que você traz ao mundo não se compara ao de ninguém, e a jornada da sua vida é justamente "
+                    f"descobrir como expressar esse brilho da forma mais autêntica possível. Quando você se "
+                    f"permite brilhar, inspira os outros a fazerem o mesmo. Seu Sol pede que você honre quem "
+                    f"você realmente é, sem se encolher para caber em expectativas alheias. O universo ganha "
+                    f"cor quando você se mostra em toda a sua verdade."
+                ),
+            },
+            {
+                "titulo": "Lua — Suas Emoções",
+                "subtitulo": "Como você sente",
+                "ordem": 3,
+                "conteudo": (
+                    "A Lua no mapa astral governa suas emoções, seu mundo interior, sua forma de reagir "
+                    "instintivamente às situações da vida. Ela revela como você busca conforto, segurança e "
+                    "acolhimento. Enquanto o Sol mostra sua identidade consciente, a Lua revela a alma que "
+                    "existe por trás da máscara que você mostra ao mundo.\n\n"
+                    "Sua vida emocional é rica e intensa, com uma necessidade profunda de segurança afetiva. "
+                    "Você se nutre de momentos de conexão genuína e silêncio contemplativo. Quando algo te "
+                    "mexe por dentro, você sente como uma onda que toma conta de todo o seu ser. Sua intuição "
+                    "é aguçada e muitas vezes você sabe como as pessoas estão se sentindo antes mesmo delas "
+                    "dizerem uma palavra.\n\n"
+                    "O desafio da Lua no seu mapa é aprender a lidar com a intensidade das próprias emoções "
+                    "sem se deixar afogar por elas. Você precisa de rituais de autocuidado, de momentos de "
+                    "solidão criativa e de um ambiente seguro para processar seus sentimentos. A Lua também "
+                    "revela sua relação com a figura materna e como você cuida dos outros. Sua capacidade de "
+                    "acolher e nutrir é um dos seus maiores dons, mas lembre-se de que você também precisa "
+                    "ser cuidada. Criar um lar interior seguro é tão importante quanto ter um lar físico onde "
+                    "seu coração se sinta em paz.\n\n"
+                    "A Lua rege também seus hábitos, sua memória emocional e sua forma de lidar com o "
+                    "passado. As experiências da infância deixaram marcas profundas em sua psique, moldando "
+                    "sua forma de amar e de confiar. Honrar sua história, com todas as suas dores e alegrias, "
+                    "é parte do caminho de cura que a Lua te convida a percorrer. Quando você se permite "
+                    "sentir sem julgamento, a Lua se torna sua maior aliada — guiando suas emoções como "
+                    "as marés guiam o oceano, com sabedoria e fluidez naturais."
+                ),
+            },
+            {
+                "titulo": "Ascendente — Sua Primeira Impressão",
+                "subtitulo": "Como os outros te veem",
+                "ordem": 4,
+                "conteudo": (
+                    f"O Ascendente é a máscara que você usa ao encontrar o mundo pela primeira vez. É a primeira "
+                    f"impressão que as pessoas têm de você, a energia que você projeta antes mesmo de falar. "
+                    f"Enquanto o Sol é quem você é por dentro, o Ascendente é como você se apresenta. É a pele "
+                    f"da sua alma, a embalagem do seu espírito, o filtro através do qual o mundo te enxerga.\n\n"
+                    f"Com ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}°, você projeta uma "
+                    f"imagem que cativa e intriga. As pessoas te percebem como alguém profundo e magnético antes "
+                    f"mesmo de conhecerem sua verdadeira essência. Há algo em você que chama atenção sem que você "
+                    f"precise fazer esforço — um brilho natural que atrai olhares e desperta curiosidade.\n\n"
+                    f"Seu Ascendente também influencia sua aparência física e seu estilo pessoal. É comum que "
+                    f"pessoas com este ascendente tenham olhos expressivos e uma presença que ocupa o espaço "
+                    f"sem precisar de palavras. Você tem um jeito único de se movimentar pelo mundo, uma "
+                    f"assinatura energética que fica gravada na memória de quem te encontra. À medida que você "
+                    f"amadurece, aprende a integrar melhor a energia do seu Ascendente com a do seu Sol, "
+                    f"tornando-se cada vez mais autêntica e completa.\n\n"
+                    f"O Ascendente é o presente que você dá ao mundo quando chega — e com o tempo, ele se "
+                    f"transforma em quem você está destinada a ser. É interessante notar como seu Ascendente "
+                    f"pode surpreender até você mesma: muitas vezes, as pessoas enxergam em você qualidades "
+                    f"que você ainda não descobriu em si mesma. Preste atenção nos elogios que recebe com "
+                    f"frequência — eles são pistas do seu Ascendente em ação. À medida que você cresce e "
+                    f"evolui, a diferença entre seu Sol e seu Ascendente diminui, e você se torna uma versão "
+                    f"cada vez mais integrada e poderosa de si mesma."
+                ),
+            },
+            {
+                "titulo": "Mercúrio — Sua Comunicação",
+                "subtitulo": "Como você pensa e fala",
+                "ordem": 5,
+                "conteudo": (
+                    "Mercúrio rege sua mente, sua comunicação, sua forma de processar informações e de se "
+                    "expressar. É o planeta que define como você aprende, como ensina, como escreve e como "
+                    "conversa. Ele mostra o estilo da sua inteligência e como você organiza seus pensamentos "
+                    "para transformá-los em palavras e ações.\n\n"
+                    "Sua mente é ágil e intuitiva, captando nuances que passam despercebidas pela maioria das "
+                    "pessoas. Você se comunica com sensibilidade e prefere conversas que toquem a alma. "
+                    "Palavras têm poder para você, e sabe usá-las com cuidado e precisão. Sua comunicação não "
+                    "é superficial — você busca o significado por trás das palavras, o não dito que existe "
+                    "entre uma frase e outra.\n\n"
+                    "Você tem talento para escrever, para criar narrativas que envolvem e cativam. Sua mente "
+                    "funciona como uma esponja, absorvendo informações do ambiente e transformando-as em "
+                    "insights profundos. Às vezes você pode ser reservada, guardando seus pensamentos mais "
+                    "íntimos para poucos, mas quando compartilha, suas palavras carregam peso e verdade. "
+                    "O desafio de Mercúrio no seu mapa é equilibrar a profundidade do seu pensamento com a "
+                    "clareza da comunicação.\n\n"
+                    "Seu dom é traduzir o complexo em simples, o profundo em acessível, transformando "
+                    "sabedoria em palavras que tocam corações. Com Mercúrio bem posicionado, você tem "
+                    "facilidade para aprender idiomas, para escrever de forma cativante e para se conectar "
+                    "com pessoas através de conversas significativas. Invista em desenvolver sua voz única "
+                    "— o mundo precisa ouvir o que você tem a dizer. Sua palavra tem poder de cura e de "
+                    "transformação quando usada com consciência."
+                ),
+            },
+            {
+                "titulo": "Vênus — Seu Amor",
+                "subtitulo": "Como você ama",
+                "ordem": 6,
+                "conteudo": (
+                    "Vênus é o planeta do amor, da beleza, dos afetos e dos valores. Ele revela como você ama, "
+                    "o que busca em um relacionamento, como expressa carinho e o que considera bonito e "
+                    "valioso na vida. Vênus também fala sobre sua relação com o dinheiro, com o prazer e com "
+                    "as coisas que trazem alegria ao seu coração.\n\n"
+                    "No amor, você busca conexão profunda e significado. Não se contenta com superficialidades "
+                    "— precisa de alguém que compreenda sua complexidade emocional. Sua lealdade é imensa "
+                    "quando encontra uma parceria que valoriza a alma tanto quanto o coração. Para você, "
+                    "amor não é apenas sentimento — é compromisso, é presença, é escolha diária.\n\n"
+                    "Você valoriza gestos sinceros mais do que grandes declarações. Um olhar que entende, um "
+                    "silêncio compartilhado, uma mão estendida no momento certo — é isso que faz seu coração "
+                    "se sentir amado. Sua sensualidade é sutil mas intensa, e você se conecta através da "
+                    "troca de energias sutis. O desafio de Vênus no seu mapa é não se fechar para o amor "
+                    "por medo de se machucar.\n\n"
+                    "Sua sensibilidade é seu maior presente nos relacionamentos, desde que você aprenda a "
+                    "usá-la como ponte e não como muro. Ame com coragem, porque sua capacidade de amar "
+                    "profundamente é um dos seus maiores dons. Vênus também rege sua relação com a beleza "
+                    "e a arte — você tem um olhar apurado para o que é estético e harmonioso. Cultivar "
+                    "espaços bonitos e momentos de prazer é essencial para seu bem-estar. Permita-se "
+                    "receber tanto quanto dá, pois o amor floresce quando há equilíbrio entre entrega e "
+                    "recepção. Você merece um amor que te veja por inteiro e que celebre cada parte de você."
+                ),
+            },
+            {
+                "titulo": "Marte — Sua Energia",
+                "subtitulo": "Como você age",
+                "ordem": 7,
+                "conteudo": (
+                    "Marte rege sua energia, sua ação, sua força de vontade e como você luta pelo que quer. "
+                    "É o planeta que mostra seu estilo de afirmação, sua raiva, sua paixão e sua libido. "
+                    "Marte é o guerreiro interior que se levanta quando algo precisa ser conquistado ou "
+                    "defendido. É a chama que acende quando você decide que algo é importante demais para "
+                    "ser ignorado.\n\n"
+                    "Sua energia é direcionada por emoções. Você age quando sente, e isso torna suas ações "
+                    "poderosas e autênticas. Quando algo toca seu coração, você move montanhas. Não é do "
+                    "tipo que faz as coisas pela metade — quando você se compromete, entrega tudo de si. "
+                    "Sua força está na intensidade com que você se dedica às causas que abraça.\n\n"
+                    "O desafio é canalizar essa força sem se deixar levar pela impulsividade. Marte no seu "
+                    "mapa pede que você aprenda a agir com estratégia, não apenas com emoção. Sua raiva, "
+                    "quando bem direcionada, pode ser um motor poderoso de transformação — use-a para "
+                    "quebrar barreiras, não para construir muros. Você tem uma energia sexual magnética e "
+                    "uma capacidade de sedução que vai além do físico.\n\n"
+                    "Seu magnetismo pessoal é forte e as pessoas sentem sua presença quando você entra em "
+                    "um ambiente. Marte te dá coragem para seguir seus instintos e lutar pelo que você "
+                    "acredita. Aprender a direcionar essa energia de forma construtiva é uma das lições "
+                    "mais importantes do seu mapa. Use sua garra para construir, para proteger, para criar. "
+                    "Sua força interior é um presente que, quando bem cultivado, te leva a conquistar "
+                    "qualquer objetivo que você realmente deseje. Não tenha medo de ser intensa — sua "
+                    "intensidade é seu superpoder."
+                ),
+            },
+            {
+                "titulo": "Júpiter e Saturno",
+                "subtitulo": "Sorte e limitações",
+                "ordem": 8,
+                "conteudo": (
+                    "Júpiter e Saturno são os planetas sociais que falam sobre sua expansão e seus limites. "
+                    "Júpiter é o grande benéfico, o planeta da sorte, da abundância, da expansão e da "
+                    "sabedoria. Ele mostra onde você encontra crescimento, onde a vida te presenteia com "
+                    "oportunidades e como você busca significado e propósito. Júpiter é o professor que "
+                    "abre portas e expande horizontes.\n\n"
+                    "Júpiter no seu mapa traz expansão através da espiritualidade e do autoconhecimento. "
+                    "Sua sorte está em confiar na intuição e buscar crescimento interior. Você atrai "
+                    "oportunidades quando está alinhada com seu propósito mais profundo. A generosidade "
+                    "é uma das suas marcas — você dá sem esperar receber, e o universo retorna em dobro. "
+                    "Sua fé na vida, mesmo nos momentos difíceis, é seu maior trunfo.\n\n"
+                    "Saturno, por outro lado, é o mestre das lições. Ele pede disciplina emocional, "
+                    "estrutura e responsabilidade. Saturno no seu mapa mostra onde você precisa construir "
+                    "fundações sólidas, onde a vida vai te testar para te fortalecer. Os desafios de "
+                    "Saturno não são punições — são treinamentos para sua alma. Cada obstáculo que você "
+                    "enfrenta desenvolve uma força que nada pode tirar de você.\n\n"
+                    "O equilíbrio entre Júpiter e Saturno é uma das chaves do seu mapa. Júpiter te convida "
+                    "a sonhar grande, a expandir seus horizontes, a confiar na abundância do universo. "
+                    "Saturno te pede para construir bases sólidas para que esses sonhos se sustentem. "
+                    "Juntos, eles formam a dupla perfeita: a fé que move montanhas e a disciplina que "
+                    "constrói estradas. Honre os dois e encontrará o equilíbrio entre expansão e estrutura. "
+                    "Lembre-se de que todo mestre Saturno tem seu presente: depois de cada lição aprendida, "
+                    "você se torna mais forte, mais sábia e mais preparada para o próximo capítulo."
+                ),
+            },
+            {
+                "titulo": "Aspectos em Foco",
+                "subtitulo": "Conexões cósmicas",
+                "ordem": 9,
+                "conteudo": (
+                    "Os aspectos são os ângulos que os planetas formam entre si no seu mapa astral. Eles "
+                    "revelam como as diferentes partes da sua personalidade se relacionam, onde há harmonia "
+                    "e onde há tensão criativa. Cada aspecto é uma conversa entre dois planetas, uma dança "
+                    "cósmica que cria padrões únicos na sua personalidade. São as conexões invisíveis que "
+                    "fazem de você quem você é.\n\n"
+                    "Os aspectos entre seus planetas revelam dinâmicas importantes. Há tensões criativas que "
+                    "impulsionam seu crescimento e harmonias que trazem dons naturais. As conjunções "
+                    "intensificam as energias envolvidas, enquanto os trígonos trazem fluidez e talento "
+                    "nato. As quadraturas e oposições são os pontos de crescimento — onde a vida te desafia "
+                    "a evoluir e a encontrar equilíbrio entre forças opostas.\n\n"
+                    "Os aspectos mais fortes do seu mapa mostram onde sua energia se concentra. São como "
+                    "holofotes cósmicos iluminando áreas específicas da sua vida que pedem atenção e "
+                    "desenvolvimento. Um aspecto tenso não é uma maldição — é um convite para crescer. "
+                    "Um aspecto harmonioso não é uma garantia — é um talento que precisa ser cultivado.\n\n"
+                    "A chave está em integrar essas energias opostas para encontrar equilíbrio e propósito. "
+                    "Não se trata de eliminar as tensões, mas de aprender a dançar com elas. Cada aspecto "
+                    "no seu mapa é uma ferramenta, um recurso que você pode usar para navegar a vida com "
+                    "mais consciência. Os aspectos mais desafiadores são, frequentemente, seus maiores "
+                    "presentes — são eles que te empurram para fora da zona de conforto e te fazem crescer. "
+                    "Observe quais áreas da sua vida geram mais atrito e veja nisso não um problema, mas "
+                    "um convite à evolução. O mapa astral não mostra um destino fixo, mas um potencial de "
+                    "crescimento que só você pode realizar."
+                ),
+            },
+            {
+                "titulo": "Mensagem Final",
+                "subtitulo": "Seu caminho cósmico",
+                "ordem": 10,
+                "conteudo": (
+                    f"{nome}, chegamos ao final desta jornada pelo seu Mapa Astral, mas seu caminho de "
+                    f"autoconhecimento está apenas começando. Este documento é um mapa da sua alma, um guia "
+                    f"para navegar as águas profundas da sua própria existência. Cada posição planetária, "
+                    f"cada aspecto e cada casa revelam um pedaço do quebra-cabeça que é você.\n\n"
+                    f"As estrelas no momento do seu nascimento desenharam um potencial único. Você não é "
+                    f"apenas o produto dos astros — você é a consciência que os observa, a alma que os "
+                    f"interpreta e a mão que escreve sua própria história. O mapa astral não é um destino "
+                    f"fixo; é um mapa de possibilidades. Você pode escolher quais caminhos seguir, quais "
+                    f"aspectos desenvolver e como expressar cada energia que recebeu ao nascer.\n\n"
+                    f"A astrologia é uma ferramenta de autoconhecimento, não uma prisão. Use estas informações "
+                    f"como um espelho para se enxergar melhor, como uma bússola para orientar suas escolhas "
+                    f"e como um lembrete de que você é parte de algo maior. O cosmos vive em você, e você "
+                    f"vive no cosmos. Cada passo que você dá em direção ao autoconhecimento é um passo em "
+                    f"direção à sua verdade mais profunda.\n\n"
+                    f"Continue explorando, continue perguntando, continue crescendo. O universo tem infinitas "
+                    f"camadas de sabedoria para revelar, e você está exatamente onde precisa estar. Que os "
+                    f"astros iluminem seu caminho e que sua jornada seja repleta de descobertas, amor e "
+                    f"transformação. Lembre-se: o maior astrólogo que existe é você mesma, no seu silêncio "
+                    f"interior, quando ouve a voz da sua própria alma. Confie nela, ela nunca te engana."
+                ),
+            },
+        ]
 
 
 # ── Placeholder roda ───────────────────────────────────────────────────────────

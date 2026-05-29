@@ -83,7 +83,7 @@ def gerar_roda_astrologica(
     casas: list = None,
     asc_grau: float = None,
     aspectos: list = None,
-    tamanho: int = 1200,
+    tamanho: int = 1800,
     bg_color: str = '#0d0d1a',
 ) -> np.ndarray:
     """Gera a imagem da roda astrológica como array numpy (RGB).
@@ -108,7 +108,7 @@ def gerar_roda_astrologica(
     ax.axis('off')
 
     cx, cy = 0, 0
-    R = 0.88  # raio normalizado (0-1)
+    R = 0.92  # raio normalizado (0-1)
 
     # Fundo escuro elegante
     fig.patch.set_facecolor(bg_color)
@@ -149,7 +149,7 @@ def gerar_roda_astrologica(
         r_sym = R + 0.075
         x_sym, y_sym = _grau_to_xy_no_cx(grau_central, r_sym)
         ax.text(x_sym, y_sym, SIMBOLOS_SIGNOS[signo_nome],
-                fontsize=22, ha='center', va='center',
+                fontsize=30, ha='center', va='center',
                 color=cor_hex, fontweight='bold', zorder=5)
 
     # ── Linha do zodíaco (anel decorativo interno) ─────────────────────────
@@ -187,33 +187,94 @@ def gerar_roda_astrologica(
         ax.text(x, y, str(i + 1), fontsize=9, ha='center', va='center',
                 color='#c0c0e0', fontweight='bold', zorder=6)
 
-    # ── Planetas (pontos + símbolos) ───────────────────────────────────────
-    R_planet = R - 0.055
+    # ── Planetas (pontos + símbolos + nomes com fan-out anti-colisão) ──
+    # Estratégia: agrupa planetas próximos em clusters, depois espalha
+    # os nomes radialmente a partir do centro do cluster, cada um num
+    # raio diferente, com linhas guia finas ligando o ponto ao nome.
+    R_planet = R - 0.07
 
     posicoes_sorted = sorted(posicoes.items(), key=lambda x: x[1][0])
 
+    # ── Detectar clusters ──────────────────────────────────────────
+    graus_lista = [(p, g) for p, (g, _, _) in posicoes_sorted]
+    CLUSTER_ANGLE = 30
+    clusters = []
+    used = set()
+    for i, (p1, g1) in enumerate(graus_lista):
+        if p1 in used:
+            continue
+        cluster = [(p1, g1)]
+        used.add(p1)
+        for j, (p2, g2) in enumerate(graus_lista):
+            if p2 in used:
+                continue
+            diff = abs(g1 - g2)
+            diff = min(diff, 360 - diff)
+            if diff < CLUSTER_ANGLE:
+                cluster.append((p2, g2))
+                used.add(p2)
+        clusters.append(cluster)
+
+    # ── Placeholder para coordenadas dos nomes (pós-processar colisão) ──
+    nome_positions = {}  # planeta -> (x, y)
+
+    # Primeiro: desenhar pontos e símbolos de todos
     for planeta, (grau_abs, signo, grau_signo) in posicoes_sorted:
         cor = COR_TIPO_PLANETA.get(planeta, (200, 200, 200))
         cor_hex = '#%02x%02x%02x' % cor
 
-        x, y = _grau_to_xy_no_cx(grau_abs, R_planet)
+        x_pt, y_pt = _grau_to_xy_no_cx(grau_abs, R_planet)
+        ax.plot(x_pt, y_pt, 'o', color=cor_hex, markersize=12, zorder=7)
 
-        # Ponto do planeta
-        ax.plot(x, y, 'o', color=cor_hex, markersize=8, zorder=7)
-
-        # Símbolo do planeta
+        # Símbolo
         symbol = PLANETAS_SIMBOLOS.get(planeta, "?")
-        r_label = R_planet - 0.035
-        xl, yl = _grau_to_xy_no_cx(grau_abs, r_label)
-        ax.text(xl, yl, symbol, fontsize=14, ha='center', va='center',
+        r_symb = R_planet - 0.03
+        xs, ys = _grau_to_xy_no_cx(grau_abs, r_symb)
+        ax.text(xs, ys, symbol, fontsize=24, ha='center', va='center',
                 color=cor_hex, fontweight='bold', zorder=8)
 
-        # Nome do planeta perto do símbolo
-        # Tenta colocar o nome fora do círculo
-        r_name = R_planet - 0.065
-        xn, yn = _grau_to_xy_no_cx(grau_abs, r_name)
-        ax.text(xn, yn, planeta, fontsize=7, ha='center', va='center',
-                color='#a0a0c0', zorder=8)
+        nome_positions[planeta] = {'grau': grau_abs, 'x_pt': x_pt, 'y_pt': y_pt, 'cor_hex': cor_hex}
+
+    # ── Posicionar nomes com fan-out radial ─────────────────────────
+    # Cada cluster ganha um spread angular e radial pra garantir zero colisão
+    NOME_FONTSIZE = 12
+    for cluster in clusters:
+        if len(cluster) == 1:
+            # Planeta isolado: nome pra dentro
+            p, g = cluster[0]
+            info = nome_positions[p]
+            r_nome = R_planet - 0.10
+            xn, yn = _grau_to_xy_no_cx(g, r_nome)
+            ax.text(xn, yn, p, fontsize=NOME_FONTSIZE, ha='center', va='center',
+                    color='#d0d0ff', fontweight='bold', zorder=8)
+        else:
+            n = len(cluster)
+            # Centro angular do cluster (média dos graus)
+            angs = [g for _, g in cluster]
+            ang_medio = sum(angs) / n
+            # Spread angular total: mais planetas = mais spread
+            spread_total = min(50, 10 + n * 8)  # 18° pra 2, 26° pra 3, 34° pra 4...
+            # Raio inicial e incremento
+            r_base = R_planet + 0.02
+            r_step = 0.035
+            for k, (p, g) in enumerate(cluster):
+                info = nome_positions[p]
+                cor_hex = info['cor_hex']
+                # Calcula ângulo do nome (fan-out a partir do centro do cluster)
+                frac = (k / (n - 1)) if n > 1 else 0.5
+                ang_nome = ang_medio - spread_total / 2 + spread_total * frac
+                ang_nome = ang_nome % 360
+                # Raio progressivo
+                r_nome = r_base + r_step * k
+                # Posição do nome
+                xn, yn = _grau_to_xy_no_cx(ang_nome, r_nome)
+                ax.text(xn, yn, p, fontsize=NOME_FONTSIZE, ha='center', va='center',
+                        color='#d0d0ff', fontweight='bold', zorder=8)
+
+                # Linha guia: do ponto do planeta até o nome (traçada suave)
+                x_pt, y_pt = info['x_pt'], info['y_pt']
+                ax.plot([x_pt, xn], [y_pt, yn], color=cor_hex, linewidth=0.5,
+                        alpha=0.4, linestyle=':', zorder=6)
 
     # ── Aspectos (linhas entre planetas) ───────────────────────────────────
     if aspectos:
@@ -278,7 +339,7 @@ def salvar_roda(
     casas: list = None,
     asc_grau: float = None,
     aspectos: list = None,
-    tamanho: int = 1200,
+    tamanho: int = 1800,
     bg_color: str = '#0d0d1a',
 ) -> str:
     """Salva a roda astrológica como PNG e retorna o caminho."""
