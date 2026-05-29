@@ -669,10 +669,13 @@ def gerar_mapa_premium(
         # ── 3. Calcular ascendente ────────────────────────────────────────
         ascendente = {"signo": "Peixes", "grau_signo": 15.0}
         try:
-            from .astro_math import calcular_ascendente
-            asc_calc = calcular_ascendente(data_nascimento, cidade)
-            if asc_calc:
-                ascendente = asc_calc
+            from .astro_math import calcular_ascendente_casas, geocode_cidade, _graus_to_signo
+            from datetime import datetime
+            dt_nasc = datetime.combine(data_nascimento, datetime.strptime(hora_nascimento, "%H:%M").time())
+            lat, lon = geocode_cidade(cidade)
+            asc_grau, _cuspides, _mc = calcular_ascendente_casas(dt_nasc, lat, lon)
+            asc_signo_dict = _graus_to_signo(asc_grau)
+            ascendente = {"signo": asc_signo_dict["signo"], "grau_signo": asc_signo_dict["grau"]}
         except Exception as e:
             logger.warning(f"Astro math indisponível: {e}")
 
