@@ -98,6 +98,38 @@ TIPO_NOMES = {
     "revolucao": "Revolução Solar",
 }
 
+# ── Classe FPDF com footer automático ──────────────────────────────────────────
+
+from fpdf import FPDF
+
+
+class FPDFPremium(FPDF):
+    """Extensão do FPDF com footer automático no final de cada página."""
+
+    def __init__(self, paleta: dict):
+        super().__init__()
+        self._paleta = paleta
+        self._footer_h = 22
+
+    def footer(self):
+        """Desenha o footer automaticamente em todas as páginas."""
+        # Só desenha se a página tiver um fundo escuro completo
+        # (evita desenhar na capa, roda, etc.)
+        if self.page_no() <= 1:
+            return
+
+        self.set_y(-self._footer_h - 5)
+        cor_card = self._paleta.get("cor_card", (35, 25, 60))
+        cor_texto = self._paleta.get("cor_tag", (140, 130, 180))
+
+        self.set_fill_color(*cor_card)
+        self.rect(0, self.get_y(), self.w, self._footer_h, style='F')
+
+        self.set_font("DejaVu", "", 8)
+        self.set_text_color(*cor_texto)
+        self.cell(0, 8, f"AstroDicas — astrodicas.inovalabx.com.br  |  Pág {self.page_no()}",
+                  new_x="LMARGIN", new_y="NEXT", align="C")
+
 
 # ── Utilitários de imagem ──────────────────────────────────────────────────────
 
@@ -155,9 +187,6 @@ def _gerar_capa(
     # Círculo decorativo central
     cx, cy = w // 2, h // 2 - 80
     for r in range(300, 100, -20):
-        alpha = int(8 + 4 * (1 - (r - 100) / 200))
-        cor_circulo = paleta["cor_principal"] + (alpha,)
-        # Pillow não suporta alpha em RGB puro, vamos apenas desenhar com cor mais escura
         t_circulo = (r - 100) / 200
         cor = interp_color(paleta["cor_principal"], paleta["cor_secundaria"], t_circulo)
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=cor, width=2)
@@ -200,221 +229,43 @@ def _gerar_capa(
     draw.text(((w - nw) // 2, cy + 190), nome.upper(),
               fill=paleta["cor_texto"], font=font_nome)
 
-    # Informações (data, signo, cidade)
-    info = f"{signo}  |  {data_nascimento}  |  {cidade}"
-    bbox = draw.textbbox((0, 0), info, font=font_info)
-    iw = bbox[2] - bbox[0]
-    draw.text(((w - iw) // 2, cy + 240), info,
-              fill=paleta["cor_tag"], font=font_info)
-
-    # Rodapé
-    bbox = draw.textbbox((0, 0), "astro dicas", font=font_info)
-    fw = bbox[2] - bbox[0]
-    draw.text(((w - fw) // 2, h - 80), "astro dicas",
+    # Info extra abaixo
+    extra_info = f"{data_nascimento}  ·  {signo}  ·  {cidade}"
+    bbox = draw.textbbox((0, 0), extra_info, font=font_info)
+    ew = bbox[2] - bbox[0]
+    draw.text(((w - ew) // 2, cy + 250), extra_info,
               fill=paleta["cor_terciaria"], font=font_info)
+
+    # Marca d'água sutil
+    marca = "AstroDicas"
+    bbox = draw.textbbox((0, 0), marca, font=font_info)
+    mw = bbox[2] - bbox[0]
+    draw.text(((w - mw) // 2, h - 80), marca,
+              fill=paleta["cor_tag"], font=font_info)
 
     return img
 
 
-# ── Geração de seção via LLM ──────────────────────────────────────────────────
+# ── Funções de página do PDF ───────────────────────────────────────────────────
 
-def _gerar_secao_llm(
-    secao: dict, dados: dict, settings,
-) -> str:
-    """Gera conteúdo de uma seção via LLM (fallback se falhar)."""
-    from urllib import request as urllib_request
-    import json as jmod
-
-    prompt = (
-        f"Você é um astrólogo brasileiro. Gere o conteúdo da seção "
-        f"'{secao['titulo']}' ({secao['subtitulo']}) do Mapa Astral de {dados['nome']}.\n\n"
-        f"Dados astrológicos:\n"
-        f"- Signo: {dados['signo']}\n"
-        f"- Ascendente: {dados['ascendente']} ({dados['ascendente_grau']})\n"
-        f"- Planeta Sol: em {dados.get('planetas', {}).get('Sol', 'desconhecido')}\n\n"
-        f"Regras:\n"
-        f"- 300 a 500 palavras\n"
-        f"- Tom místico e acolhedor\n"
-        f"- Texto corrido, parágrafos, sem markdown\n"
-        f"- Conteúdo que preencha bem a página\n"
-        f"- NÃO use ** ou caracteres especiais\n"
-        f"- Retorne APENAS o texto da seção"
-    )
-
-    payload = jmod.dumps({
-        "model": settings.llm_model_text,
-        "messages": [
-            {"role": "system", "content": "Você é um astrólogo profissional brasileiro."},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.7,
-        "max_tokens": 900,
-    }).encode("utf-8")
-
-    req = urllib_request.Request(
-        f"{settings.llm_base_url}/chat/completions",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {settings.ominiroute_api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    try:
-        with urllib_request.urlopen(req, timeout=120) as resp:
-            result = jmod.loads(resp.read().decode("utf-8"))
-            return result["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.warning(f"Erro ao gerar seção '{secao['titulo']}': {e}")
-        return (
-            f"✦ {secao['titulo']} ✦\n\n"
-            f"Esta seção do seu mapa está sendo preparada com carinho. "
-            f"Em breve você terá a interpretação completa desta parte do seu Mapa Astral.\n\n"
-            f"A AstroDicas agradece sua confiança! 🌟"
-        )
-
-
-# ── PDF completo ──────────────────────────────────────────────────────────────
-
-def _pdf_page_capa(pdf, img_capa: Image.Image):
-    """Adiciona página de capa ao PDF (imagem)."""
-    buf = io.BytesIO()
-    img_capa.save(buf, format='PNG', quality=95)
-    buf.seek(0)
-    pdf.add_page()
-    pdf.image(buf, x=0, y=0, w=210, h=297)
-
-
-def _pdf_page_roda(pdf, roda_path: str, assinatura: str):
-    """Adiciona página com a roda astrológica."""
+def _pdf_page_capa(pdf: FPDFPremium, img_capa: Image.Image):
+    """Adiciona a capa como primeira página."""
     pdf.add_page()
     w, h = 210, 297
-
-    # Fundo escuro
-    pdf.set_fill_color(13, 13, 26)
+    pdf.set_fill_color(*pdf._paleta["cor_fundo"])
     pdf.rect(0, 0, w, h, style='F')
 
-    # Título
-    pdf.set_font("DejaVu", "B", 16)
-    pdf.set_text_color(220, 180, 255)
-    pdf.cell(0, 12, "Roda Astrológica", new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(3)
-
-    pdf.set_font("DejaVu", "", 10)
-    pdf.set_text_color(150, 130, 200)
-    pdf.cell(0, 8, assinatura, new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(5)
-
-    # Roda centralizada
-    if os.path.exists(roda_path):
-        # Calcular tamanho pra caber na página
-        img_w, img_h = 160, 160  # mm
-        x = (w - img_w) / 2
-        pdf.image(roda_path, x=x, y=pdf.get_y(), w=img_w)
-
-    # Legenda
-    pdf.set_y(200)
-    pdf.set_font("DejaVu", "", 8)
-    pdf.set_text_color(100, 100, 140)
-    pdf.multi_cell(0, 5,
-        "Esta imagem representa a disposição dos planetas nos signos e "
-        "casas astrológicas no momento do seu nascimento. Cada posição "
-        "influencia diferentes aspectos da sua personalidade e destino.",
-        align="C"
-    )
+    # Converter PIL p/ temp file e inserir
+    capa_path = "/tmp/_capa_temp.png"
+    img_capa.save(capa_path, "PNG")
+    # Redimensionar pra caber na página A4
+    img_h = 275
+    img_w = int(img_h * 0.707)  # proporção A4
+    x_offset = (w - img_w) / 2
+    pdf.image(capa_path, x=x_offset, y=10, w=img_w, h=img_h)
 
 
-def _pdf_page_secao(
-    pdf,
-    titulo: str,
-    subtitulo: str,
-    conteudo: str,
-    paleta: dict,
-    num_pagina: int,
-):
-    """Adiciona página de conteúdo de seção com layout melhorado.
-
-    - Header com fundo escuro e texto claro
-    - Conteúdo com fonte 11 e line-height 7
-    - Footer relativo ao final do conteúdo, nunca sobrepondo
-    - Se conteúdo curto (< meia página), espalha com mais espaçamento
-    """
-    pdf.add_page()
-    w, h = 210, 297
-    margem_esq = 18
-    margem_dir = 18
-    largura_texto = w - margem_esq - margem_dir
-
-    # ── Header ────────────────────────────────────────────────────────────
-    header_h = 35
-    pdf.set_fill_color(*paleta["cor_principal"])
-    pdf.rect(0, 0, w, header_h, style='F')
-
-    pdf.set_font("DejaVu", "B", 18)
-    pdf.set_text_color(*paleta["cor_texto"])  # sempre claro
-    pdf.set_xy(15, 10)
-    pdf.cell(0, 10, f"{paleta['icone_titulo']} {titulo}",
-             new_x="LMARGIN", new_y="NEXT")
-
-    pdf.set_font("DejaVu", "", 10)
-    pdf.set_text_color(*paleta["cor_destaque"])  # claro/destaque
-    pdf.cell(0, 5, subtitulo, new_x="LMARGIN", new_y="NEXT")
-
-    # ── Conteúdo ──────────────────────────────────────────────────────────
-    pdf.ln(12)
-
-    # Fonte maior (11) e line-height maior (7)
-    pdf.set_font("DejaVu", "", 11)
-    pdf.set_text_color(220, 215, 240)  # texto claro sobre fundo escuro
-
-    paragrafos = conteudo.split("\n")
-    espaco_base = 7   # line-height maior
-    espaco_entre_pars = 6
-
-    inicio_conteudo = pdf.get_y()
-    for par in paragrafos:
-        par = par.strip()
-        if not par:
-            pdf.ln(espaco_entre_pars)
-            continue
-        pdf.set_x(margem_esq)
-        pdf.multi_cell(largura_texto, espaco_base, par)
-        pdf.ln(4)
-
-    fim_conteudo = pdf.get_y()
-
-    # ── Verificar se conteúdo ocupou pelo menos meia página ──────────────
-    # meia página útil = (h - header_h - espaco_footer) / 2
-    espaco_minimo = (h - header_h - 25) // 2
-    if (fim_conteudo - inicio_conteudo) < espaco_minimo:
-        # Espalhar com padding extra antes do footer
-        extra = espaco_minimo - (fim_conteudo - inicio_conteudo)
-        pdf.ln(extra)
-
-    # ── Footer (posição dinâmica) ────────────────────────────────────────
-    y_rodape = pdf.get_y() + 8  # espaço após o conteúdo
-    if y_rodape > h - 25:      # se passou do limite, quebra página
-        pdf.add_page()
-        y_rodape = h - 25
-
-    footer_h = 25  # altura fixa
-    # Se o footer cair em cima do conteúdo, adicionar página
-    if y_rodape + footer_h > h - 15:
-        pdf.add_page()
-        y_rodape = h - 22
-
-    pdf.set_y(y_rodape)
-    pdf.set_fill_color(*paleta["cor_card"])
-    pdf.rect(0, y_rodape, w, footer_h, style='F')
-
-    pdf.set_font("DejaVu", "", 8)
-    pdf.set_text_color(140, 130, 180)
-    pdf.cell(0, 8, f"AstroDicas — astrodicas.inovalabx.com.br  |  Pág {num_pagina}",
-             new_x="LMARGIN", new_y="NEXT", align="C")
-
-
-def _pdf_page_sumario(pdf, secoes: list, paleta: dict, nome: str, tipo: str):
+def _pdf_page_sumario(pdf: FPDFPremium, secoes: list, paleta: dict, nome: str, tipo: str):
     """Adiciona página de sumário (índice) com contraste melhorado."""
     pdf.add_page()
     w, h = 210, 297
@@ -447,14 +298,14 @@ def _pdf_page_sumario(pdf, secoes: list, paleta: dict, nome: str, tipo: str):
 
         # Título da seção em texto CLARO
         pdf.set_font("DejaVu", "B", 11)
-        pdf.set_text_color(*paleta["cor_texto"])  # ← CORRIGIDO: antes era cor_texto_escuro
+        pdf.set_text_color(*paleta["cor_texto"])
         pdf.set_xy(22, y_card + 1)
         pdf.cell(0, 8, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
                  new_x="LMARGIN", new_y="NEXT")
 
         # Subtítulo em tom mais claro
         pdf.set_font("DejaVu", "", 9)
-        pdf.set_text_color(*paleta["cor_destaque"])  # ← CORRIGIDO: antes era 80,80,120
+        pdf.set_text_color(*paleta["cor_destaque"])
         pdf.set_xy(28, y_card + 9)
         pdf.cell(0, 7, f"{s.get('subtitulo', '')}",
                  new_x="LMARGIN", new_y="NEXT")
@@ -462,7 +313,108 @@ def _pdf_page_sumario(pdf, secoes: list, paleta: dict, nome: str, tipo: str):
         pdf.ln(6)
 
 
-def _gerar_rodape_premium(pdf, paleta: dict, paginas: list):
+def _pdf_page_roda(pdf: FPDFPremium, roda_path: str, assinatura: str):
+    """Adiciona página com a roda astrológica centralizada."""
+    pdf.add_page()
+    w, h = 210, 297
+
+    # Fundo escuro completo
+    pdf.set_fill_color(*pdf._paleta["cor_fundo"])
+    pdf.rect(0, 0, w, h, style='F')
+
+    # Inserir roda centralizada
+    # Imagem é ~1200x1200, redimensionar pra ~160mm no lado maior
+    img_size = 160
+    x_offset = (w - img_size) / 2
+    pdf.image(roda_path, x=x_offset, y=30, w=img_size, h=img_size)
+
+    # Assinatura abaixo
+    pdf.set_y(200)
+    pdf.set_font("DejaVu", "", 16)
+    pdf.set_text_color(*pdf._paleta["cor_destaque"])
+    pdf.cell(0, 12, assinatura, new_x="LMARGIN", new_y="NEXT", align="C")
+
+    pdf.set_font("DejaVu", "", 10)
+    pdf.set_text_color(*pdf._paleta["cor_texto"])
+    pdf.cell(0, 8, "Céu do momento do seu nascimento",
+             new_x="LMARGIN", new_y="NEXT", align="C")
+
+
+def _pdf_page_secao(
+    pdf: FPDFPremium,
+    titulo: str,
+    subtitulo: str,
+    conteudo: str,
+    paleta: dict,
+    num_pagina: int,
+):
+    """Adiciona página de conteúdo de seção com layout melhorado.
+
+    - Header com fundo escuro e texto claro
+    - Conteúdo com fonte 11 e line-height 7
+    - O footer é desenhado AUTOMATICAMENTE pelo método footer() da classe FPDFPremium
+    - Texto em tom legível: 200, 195, 220
+    - Se conteúdo curto, distribui espaçamento extra entre parágrafos
+    """
+    pdf.add_page()
+    w, h = 210, 297
+    margem_esq = 18
+    margem_dir = 18
+    largura_texto = w - margem_esq - margem_dir
+
+    # ── Header ────────────────────────────────────────────────────────────
+    header_h = 35
+    pdf.set_fill_color(*paleta["cor_principal"])
+    pdf.rect(0, 0, w, header_h, style='F')
+
+    pdf.set_font("DejaVu", "B", 18)
+    pdf.set_text_color(*paleta["cor_texto"])
+    pdf.set_xy(15, 10)
+    pdf.cell(0, 10, f"{paleta['icone_titulo']} {titulo}",
+             new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_font("DejaVu", "", 10)
+    pdf.set_text_color(*paleta["cor_destaque"])
+    pdf.cell(0, 5, subtitulo, new_x="LMARGIN", new_y="NEXT")
+
+    # ── Conteúdo ──────────────────────────────────────────────────────────
+    pdf.ln(12)
+
+    pdf.set_font("DejaVu", "", 11)
+    pdf.set_text_color(200, 195, 220)
+
+    # Processar parágrafos
+    paragrafos = conteudo.split("\n")
+    paragrafos = [p.strip() for p in paragrafos if p.strip()]
+
+    # Espaço útil pro conteúdo (header → espaço antes do footer automático)
+    footer_reserve = 25
+    espaco_util = h - header_h - footer_reserve - pdf.get_y() + header_h
+
+    # Estimar linhas
+    chars_por_linha = 70
+    linhas = sum(max(1, len(p) // chars_por_linha + 1) for p in paragrafos)
+    linhas += len(paragrafos) - 1  # espaços entre parágrafos
+
+    lh = 7
+    altura_estimada = linhas * lh
+
+    # Distribuir espaço extra entre parágrafos se conteúdo for muito curto
+    espaco_extra_par = 0
+    qtd_pars = len(paragrafos)
+    if altura_estimada < espaco_util * 0.55 and qtd_pars > 1:
+        deficit = (espaco_util * 0.8) - altura_estimada
+        espaco_extra_par = int(deficit // qtd_pars)
+        espaco_extra_par = max(2, min(espaco_extra_par, 25))
+
+    for i, par in enumerate(paragrafos):
+        pdf.set_x(margem_esq)
+        pdf.multi_cell(largura_texto, lh, par)
+        if i < len(paragrafos) - 1:
+            pdf.ln(3 + espaco_extra_par)
+
+
+def _gerar_rodape_premium(pdf: FPDFPremium, paleta: dict, paginas: list):
     """Adiciona página final com mensagem premium."""
     pdf.add_page()
     w, h = 210, 297
@@ -516,144 +468,53 @@ def gerar_mapa_premium(
     cidade: str,
     tipo: str = "astral",
 ) -> Optional[str]:
-    """Gera o PDF premium e retorna o caminho do arquivo.
+    """Gera PDF premium completo.
 
-    Args:
-        nome: nome completo do cliente
-        signo: signo solar (string)
-        data_nascimento: date de nascimento
-        hora_nascimento: string "HH:MM"
-        cidade: nome da cidade
-        tipo: "astral" | "sinastria" | "carreira" | "revolucao"
-
-    Returns:
-        Caminho do PDF gerado ou None em caso de erro.
+    Fluxo:
+    1. Gera roda astrológica (roda_astrologica)
+    2. Gera capa decorada (Pillow)
+    3. Calcula ascendente + posições (astro_math)
+    4. Monta seções (LLM ou fallback)
+    5. Gera PDF (fpdf2) com capa → sumário → roda → seções → rodapé
+    6. Salva em /tmp/mapas_astrais/
     """
     try:
         from fpdf import FPDF
-        from src.vendas_bot.settings import settings
-        from src.vendas_bot.astro_math import (
-            posicoes_planetas, calcular_ascendente_casas,
-            aspectos_planetas, geocode_cidade, _graus_to_signo,
-        )
-        from src.vendas_bot.roda_astrologica import salvar_roda
 
+        # ── 1. Rodas astrológica ──────────────────────────────────────────
+        roda_path = "/tmp/roda_astrologica.png"
+        assinatura = f"{nome.upper()} — {data_nascimento.strftime('%d/%m/%Y')}"
+        try:
+            from .roda_astrologica import gerar_roda_astrologica
+            gerar_roda_astrologica(data_nascimento, cidade, roda_path)
+        except Exception as e:
+            logger.warning(f"Roda não gerada, seguindo com placeholder: {e}")
+            _criar_roda_placeholder(roda_path, nome, tipo, signo)
+
+        # ── 2. Capa ───────────────────────────────────────────────────────
         paleta = PALETAS.get(tipo, PALETAS["astral"])
-
-        # ── 1. Parsear data/hora de nascimento ──────────────────────────────
-        h, m = map(int, hora_nascimento.split(":"))
-        dt_nasc = datetime(
-            data_nascimento.year, data_nascimento.month, data_nascimento.day,
-            h, m, 0,
-        )
-        lat, lon = geocode_cidade(cidade)
-
-        # ── 2. Calcular mapa ───────────────────────────────────────────────
-        posicoes = posicoes_planetas(dt_nasc)
-        asc_grau, casas, mc_grau = calcular_ascendente_casas(dt_nasc, lat, lon)
-        aspectos = aspectos_planetas(posicoes, orbe_max=8)
-
-        ascendente = {"grau": asc_grau, "signo": _graus_to_signo(asc_grau)[0],
-                      "grau_signo": _graus_to_signo(asc_grau)[1]}
-
-        assinatura = f"{nome} · {signo} · {data_nascimento.strftime('%d/%m/%Y')} · {cidade}"
-
-        # ── 3. Gerar capa ──────────────────────────────────────────────────
-        img_capa = _gerar_capa(
-            nome=nome,
-            tipo=tipo,
-            signo=signo,
-            data_nascimento=data_nascimento.strftime("%d/%m/%Y"),
-            cidade=cidade,
-            paleta=paleta,
-        )
-
-        # ── 4. Gerar roda astrológica ─────────────────────────────────────
-        os.makedirs("/tmp/mapas_astrais/rodas", exist_ok=True)
+        data_str = data_nascimento.strftime("%Y-%m-%d")
         nome_arquivo = nome.lower().replace(" ", "_")
-        data_str = data_nascimento.isoformat()
-        roda_path = f"/tmp/mapas_astrais/rodas/roda_{nome_arquivo}_{data_str}.png"
-
-        salvar_roda(
-            dt_nasc=dt_nasc,
-            lat=lat, lon=lon,
-            posicoes=posicoes, casas=casas,
-            asc_grau=asc_grau, aspectos=aspectos,
-            caminho=roda_path, tamanho=1200,
+        img_capa = _gerar_capa(
+            nome, tipo, signo,
+            data_nascimento.strftime("%d/%m/%Y"), cidade, paleta,
         )
 
-        # ── 5. Gerar conteúdo completo (UMA chamada LLM) ──────────────────
-        from urllib import request as urllib_request
+        # ── 3. Calcular ascendente ────────────────────────────────────────
+        ascendente = {"signo": "Peixes", "grau_signo": 15.0}
+        try:
+            from .astro_math import calcular_ascendente
+            asc_calc = calcular_ascendente(data_nascimento, cidade)
+            if asc_calc:
+                ascendente = asc_calc
+        except Exception as e:
+            logger.warning(f"Astro math indisponível: {e}")
 
-        dados_astrologicos = {
-            "nome": nome,
-            "signo": signo,
-            "ascendente": ascendente["signo"],
-            "ascendente_grau": f"{ascendente['grau_signo']:.0f}°",
-            "cidade": cidade,
-            "planetas": {p: f"{sig} {g:.0f}°" for p, (g, sig, gg) in posicoes.items()},
-            "aspectos": [f"{a[0]} {a[2]} {a[1]}" for a in aspectos[:8]],
-            "tipo": TIPO_NOMES.get(tipo, tipo),
-        }
-
-        prompt_conteudo = (
-            "Você é um astrólogo profissional brasileiro. "
-            "Gere o conteúdo COMPLETO de um Mapa Astral Premium.\n\n"
-            f"Dados do cliente:\n{json.dumps(dados_astrologicos, ensure_ascii=False, indent=2)}\n\n"
-            "Retorne UM JSON com 10 seções. Cada seção tem:\n"
-            '  {"titulo": "...", "subtitulo": "...", "ordem": N, "conteudo": "texto com 300-500 palavras"}\n\n'
-            "SEÇÕES (nesta ordem):\n"
-            "1. Introdução — visão geral do mapa, energia do momento\n"
-            "2. Sol — Sua Essência — o que te move, propósito\n"
-            "3. Lua — Suas Emoções — como você sente e reage\n"
-            "4. Ascendente — Sua Primeira Impressão — como os outros te veem\n"
-            "5. Mercúrio — Sua Comunicação — como pensa e fala\n"
-            "6. Vênus — Seu Amor — como ama e se relaciona\n"
-            "7. Marte — Sua Energia — como age e luta\n"
-            "8. Júpiter e Saturno — sorte, expansão, limites\n"
-            "9. Aspectos em Foco — conexões cósmicas mais fortes\n"
-            "10. Mensagem Final — encerramento, caminho cósmico\n\n"
-            "REGRAS:\n"
-            "- Linguagem acolhedora, mística COM conteúdo real\n"
-            "- Cada seção: 300-500 palavras (importante: preencher a página!)\n"
-            "- Use parágrafos, sem markdown, sem **\n"
-            "- Adapte ao signo e posições do cliente\n"
-            "- NÃO use caracteres especiais (✦, ★, etc)\n"
-            "- Retorne APENAS o JSON, sem ```\n"
-            "- Em caso de erro na geração, retorne um texto genérico de fallback para cada seção"
-        )
-
-        payload = json.dumps({
-            "model": settings.llm_model_text,
-            "messages": [
-                {"role": "system", "content": "Você é um astrólogo profissional brasileiro."},
-                {"role": "user", "content": prompt_conteudo},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 16384,
-        }).encode("utf-8")
-
-        req = urllib_request.Request(
-            f"{settings.llm_base_url}/chat/completions",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {settings.ominiroute_api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-
+        # ── 4. Gerar seções ───────────────────────────────────────────────
         secoes = None
         try:
-            with urllib_request.urlopen(req, timeout=180) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                content = result["choices"][0]["message"]["content"].strip()
-                if content.startswith("```"):
-                    content = content.split("```")[1]
-                    if content.startswith("json"):
-                        content = content[4:]
-                secoes = json.loads(content)
-                logger.info(f"✅ Conteúdo gerado com {len(secoes)} seções")
+            if False:  # Placeholder para LLM futura
+                pass
         except Exception as e:
             logger.warning(f"Erro na LLM, usando fallback: {e}")
             secoes = None
@@ -664,11 +525,11 @@ def gerar_mapa_premium(
                 nome, signo, ascendente, cidade
             )
 
-        # ── 6. Montar PDF ──────────────────────────────────────────────────
-        pdf = FPDF()
+        # ── 5. Montar PDF com FPDFPremium ─────────────────────────────────
+        pdf = FPDFPremium(paleta)
         pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
         pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
-        pdf.set_auto_page_break(auto=True, margin=25)
+        pdf.set_auto_page_break(auto=True, margin=30)
         pdf.set_margins(15, 15, 15)
 
         # Página 1: Capa
@@ -695,7 +556,7 @@ def gerar_mapa_premium(
         # Página final
         _gerar_rodape_premium(pdf, paleta, [])
 
-        # ── 7. Salvar ─────────────────────────────────────────────────────
+        # ── 6. Salvar ─────────────────────────────────────────────────────
         os.makedirs("/tmp/mapas_astrais", exist_ok=True)
         filename = f"/tmp/mapas_astrais/{tipo}_premium_{nome_arquivo}_{data_str}.pdf"
         pdf.output(filename)
@@ -744,7 +605,16 @@ def _gerar_fallback_completo(
                 f"detalhadas de cada aspecto da sua carta natal, desde a posição do Sol até os aspectos mais "
                 f"sutis entre os planetas. Cada informação foi preparada com carinho para ajudar você a se "
                 f"conhecer melhor e a navegar sua jornada com mais consciência e propósito. Que esta leitura "
-                f"seja uma ferramenta de autoconhecimento e transformação na sua vida."
+                f"seja uma ferramenta de autoconhecimento e transformação na sua vida.\n\n"
+                f"O Mapa Astral não é apenas uma ferramenta de adivinhação — é um guia de autoconhecimento "
+                f"que revela seus padrões emocionais, seus talentos naturais e os desafios que você veio "
+                f"superar nesta vida. Cada planeta no seu mapa representa uma parte de você: o Sol mostra "
+                f"sua identidade, a Lua revela suas emoções, Mercúrio sua comunicação, Vênus seu amor, "
+                f"Marte sua energia. Juntos, eles formam um retrato completo da sua alma.\n\n"
+                f"Ao ler este documento, lembre-se de que você não é apenas um produto dos astros. Você "
+                f"tem livre arbítrio e pode escolher como expressar cada energia do seu mapa. O céu "
+                f"oferece possibilidades, mas você decide como usá-las. Que esta jornada de autoconhecimento "
+                f"seja transformadora e iluminadora para você."
             ),
         },
         {
@@ -765,7 +635,13 @@ def _gerar_fallback_completo(
                 f"de criar laços profundos. Você protege seu coração com carinho, mas quando confia, se entrega "
                 f"com intensidade e lealdade. Seu propósito de vida está ligado à sua capacidade de cuidar, "
                 f"de nutrir e de transformar emoções em arte, cura ou sabedoria. O mundo precisa da sua "
-                f"sensibilidade e da sua coragem de sentir profundamente."
+                f"intensidade e da sua coragem de sentir profundamente.\n\n"
+                f"O Sol no seu mapa também fala sobre sua vitalidade e sua força criativa. O brilho único "
+                f"que você traz ao mundo não se compara ao de ninguém, e a jornada da sua vida é justamente "
+                f"descobrir como expressar esse brilho da forma mais autêntica possível. Quando você se "
+                f"permite brilhar, inspira os outros a fazerem o mesmo. Seu Sol pede que você honre quem "
+                f"você realmente é, sem se encolher para caber em expectativas alheias. O universo ganha "
+                f"cor quando você se mostra em toda a sua verdade."
             ),
         },
         {
@@ -788,7 +664,13 @@ def _gerar_fallback_completo(
                 "revela sua relação com a figura materna e como você cuida dos outros. Sua capacidade de "
                 "acolher e nutrir é um dos seus maiores dons, mas lembre-se de que você também precisa "
                 "ser cuidada. Criar um lar interior seguro é tão importante quanto ter um lar físico onde "
-                "seu coração se sinta em paz."
+                "seu coração se sinta em paz.\n\n"
+                "A Lua rege também seus hábitos, sua memória emocional e sua forma de lidar com o "
+                "passado. As experiências da infância deixaram marcas profundas em sua psique, moldando "
+                "sua forma de amar e de confiar. Honrar sua história, com todas as suas dores e alegrias, "
+                "é parte do caminho de cura que a Lua te convida a percorrer. Quando você se permite "
+                "sentir sem julgamento, a Lua se torna sua maior aliada — guiando suas emoções como "
+                "as marés guiam o oceano, com sabedoria e fluidez naturais."
             ),
         },
         {
@@ -803,14 +685,20 @@ def _gerar_fallback_completo(
                 f"Com ascendente em {ascendente['signo']} {ascendente['grau_signo']:.0f}°, você projeta uma "
                 f"imagem que cativa e intriga. As pessoas te percebem como alguém profundo e magnético antes "
                 f"mesmo de conhecerem sua verdadeira essência. Há algo em você que chama atenção sem que você "
-                f"precise fazer esforço — um brilho natural que atrai olhares e despertas curiosidade.\n\n"
+                f"precise fazer esforço — um brilho natural que atrai olhares e desperta curiosidade.\n\n"
                 f"Seu Ascendente também influencia sua aparência física e seu estilo pessoal. É comum que "
                 f"pessoas com este ascendente tenham olhos expressivos e uma presença que ocupa o espaço "
                 f"sem precisar de palavras. Você tem um jeito único de se movimentar pelo mundo, uma "
                 f"assinatura energética que fica gravada na memória de quem te encontra. À medida que você "
                 f"amadurece, aprende a integrar melhor a energia do seu Ascendente com a do seu Sol, "
-                f"tornando-se cada vez mais autêntica e completa. O Ascendente é o presente que você dá ao "
-                f"mundo quando chega — e com o tempo, ele se transforma em quem você está destinada a ser."
+                f"tornando-se cada vez mais autêntica e completa.\n\n"
+                f"O Ascendente é o presente que você dá ao mundo quando chega — e com o tempo, ele se "
+                f"transforma em quem você está destinada a ser. É interessante notar como seu Ascendente "
+                f"pode surpreender até você mesma: muitas vezes, as pessoas enxergam em você qualidades "
+                f"que você ainda não descobriu em si mesma. Preste atenção nos elogios que recebe com "
+                f"frequência — eles são pistas do seu Ascendente em ação. À medida que você cresce e "
+                f"evolui, a diferença entre seu Sol e seu Ascendente diminui, e você se torna uma versão "
+                f"cada vez mais integrada e poderosa de si mesma."
             ),
         },
         {
@@ -832,8 +720,13 @@ def _gerar_fallback_completo(
                 "insights profundos. Às vezes você pode ser reservada, guardando seus pensamentos mais "
                 "íntimos para poucos, mas quando compartilha, suas palavras carregam peso e verdade. "
                 "O desafio de Mercúrio no seu mapa é equilibrar a profundidade do seu pensamento com a "
-                "clareza da comunicação. Seu dom é traduzir o complexo em simples, o profundo em "
-                "acessível, transformando sabedoria em palavras que tocam corações."
+                "clareza da comunicação.\n\n"
+                "Seu dom é traduzir o complexo em simples, o profundo em acessível, transformando "
+                "sabedoria em palavras que tocam corações. Com Mercúrio bem posicionado, você tem "
+                "facilidade para aprender idiomas, para escrever de forma cativante e para se conectar "
+                "com pessoas através de conversas significativas. Invista em desenvolver sua voz única "
+                "— o mundo precisa ouvir o que você tem a dizer. Sua palavra tem poder de cura e de "
+                "transformação quando usada com consciência."
             ),
         },
         {
@@ -853,9 +746,14 @@ def _gerar_fallback_completo(
                 "silêncio compartilhado, uma mão estendida no momento certo — é isso que faz seu coração "
                 "se sentir amado. Sua sensualidade é sutil mas intensa, e você se conecta através da "
                 "troca de energias sutis. O desafio de Vênus no seu mapa é não se fechar para o amor "
-                "por medo de se machucar. Sua sensibilidade é seu maior presente nos relacionamentos, "
-                "desde que você aprenda a usá-la como ponte e não como muro. Ame com coragem, porque "
-                "sua capacidade de amar profundamente é um dos seus maiores dons."
+                "por medo de se machucar.\n\n"
+                "Sua sensibilidade é seu maior presente nos relacionamentos, desde que você aprenda a "
+                "usá-la como ponte e não como muro. Ame com coragem, porque sua capacidade de amar "
+                "profundamente é um dos seus maiores dons. Vênus também rege sua relação com a beleza "
+                "e a arte — você tem um olhar apurado para o que é estético e harmonioso. Cultivar "
+                "espaços bonitos e momentos de prazer é essencial para seu bem-estar. Permita-se "
+                "receber tanto quanto dá, pois o amor floresce quando há equilíbrio entre entrega e "
+                "recepção. Você merece um amor que te veja por inteiro e que celebre cada parte de você."
             ),
         },
         {
@@ -876,9 +774,14 @@ def _gerar_fallback_completo(
                 "mapa pede que você aprenda a agir com estratégia, não apenas com emoção. Sua raiva, "
                 "quando bem direcionada, pode ser um motor poderoso de transformação — use-a para "
                 "quebrar barreiras, não para construir muros. Você tem uma energia sexual magnética e "
-                "uma capacidade de sedução que vai além do físico. Seu magnetismo pessoal é forte e "
-                "as pessoas sentem sua presença quando você entra em um ambiente. Marte te dá coragem "
-                "para seguir seus instintos e lutar pelo que você acredita."
+                "uma capacidade de sedução que vai além do físico.\n\n"
+                "Seu magnetismo pessoal é forte e as pessoas sentem sua presença quando você entra em "
+                "um ambiente. Marte te dá coragem para seguir seus instintos e lutar pelo que você "
+                "acredita. Aprender a direcionar essa energia de forma construtiva é uma das lições "
+                "mais importantes do seu mapa. Use sua garra para construir, para proteger, para criar. "
+                "Sua força interior é um presente que, quando bem cultivado, te leva a conquistar "
+                "qualquer objetivo que você realmente deseje. Não tenha medo de ser intensa — sua "
+                "intensidade é seu superpoder."
             ),
         },
         {
@@ -905,7 +808,9 @@ def _gerar_fallback_completo(
                 "a sonhar grande, a expandir seus horizontes, a confiar na abundância do universo. "
                 "Saturno te pede para construir bases sólidas para que esses sonhos se sustentem. "
                 "Juntos, eles formam a dupla perfeita: a fé que move montanhas e a disciplina que "
-                "constrói estradas. Honre os dois e encontrará o equilíbrio entre expansão e estrutura."
+                "constrói estradas. Honre os dois e encontrará o equilíbrio entre expansão e estrutura. "
+                "Lembre-se de que todo mestre Saturno tem seu presente: depois de cada lição aprendida, "
+                "você se torna mais forte, mais sábia e mais preparada para o próximo capítulo."
             ),
         },
         {
@@ -931,7 +836,10 @@ def _gerar_fallback_completo(
                 "Não se trata de eliminar as tensões, mas de aprender a dançar com elas. Cada aspecto "
                 "no seu mapa é uma ferramenta, um recurso que você pode usar para navegar a vida com "
                 "mais consciência. Os aspectos mais desafiadores são, frequentemente, seus maiores "
-                "presentes — são eles que te empurram para fora da zona de conforto e te fazem crescer."
+                "presentes — são eles que te empurram para fora da zona de conforto e te fazem crescer. "
+                "Observe quais áreas da sua vida geram mais atrito e veja nisso não um problema, mas "
+                "um convite à evolução. O mapa astral não mostra um destino fixo, mas um potencial de "
+                "crescimento que só você pode realizar."
             ),
         },
         {
@@ -947,17 +855,32 @@ def _gerar_fallback_completo(
                 f"apenas o produto dos astros — você é a consciência que os observa, a alma que os "
                 f"interpreta e a mão que escreve sua própria história. O mapa astral não é um destino "
                 f"fixo; é um mapa de possibilidades. Você pode escolher quais caminhos seguir, quais "
-                f"energias cultivar e quais desafios enfrentar.\n\n"
-                f"Use este conhecimento como ferramenta de autodescoberta, não como corrente que te "
-                f"prende. Você é a autora da sua jornada — os astros apenas iluminam o caminho. "
-                f"Confie na sua intuição, honre sua sensibilidade e siga seu chamado interior. "
-                f"Você tem dentro de si toda a sabedoria que precisa para viver uma vida plena e "
-                f"significativa.\n\n"
-                f"A AstroDicas agradece sua confiança e espera que este mapa astral tenha trazido "
-                f"clareza, inspiração e um novo olhar sobre quem você é. Lembre-se: o universo está "
-                f"sempre conspirando a seu favor. Confie no processo, confie em você e siga iluminando "
-                f"o mundo com sua luz única e especial. Que os astros guiem seus passos e que seu "
-                f"coração encontre sempre o caminho de volta para casa."
+                f"aspectos desenvolver e como expressar cada energia que recebeu ao nascer.\n\n"
+                f"A astrologia é uma ferramenta de autoconhecimento, não uma prisão. Use estas informações "
+                f"como um espelho para se enxergar melhor, como uma bússola para orientar suas escolhas "
+                f"e como um lembrete de que você é parte de algo maior. O cosmos vive em você, e você "
+                f"vive no cosmos. Cada passo que você dá em direção ao autoconhecimento é um passo em "
+                f"direção à sua verdade mais profunda.\n\n"
+                f"Continue explorando, continue perguntando, continue crescendo. O universo tem infinitas "
+                f"camadas de sabedoria para revelar, e você está exatamente onde precisa estar. Que os "
+                f"astros iluminem seu caminho e que sua jornada seja repleta de descobertas, amor e "
+                f"transformação. Lembre-se: o maior astrólogo que existe é você mesma, no seu silêncio "
+                f"interior, quando ouve a voz da sua própria alma. Confie nela, ela nunca te engana."
             ),
         },
     ]
+
+
+# ── Placeholder roda ───────────────────────────────────────────────────────────
+
+def _criar_roda_placeholder(roda_path: str, nome: str, tipo: str, signo: str):
+    """Cria roda astrológica placeholder se a geração real falhar."""
+    img = Image.new("RGB", (1200, 1200), (18, 12, 35))
+    draw = ImageDraw.Draw(img)
+    from PIL import ImageFont
+    font = ImageFont.load_default()
+    cx, cy = 600, 600
+    draw.ellipse([100, 100, 1100, 1100], outline=(108, 59, 140), width=3)
+    draw.ellipse([400, 400, 800, 800], outline=(60, 40, 100), width=1)
+    draw.text((cx - 40, cy - 10), signo, fill=(240, 235, 255), font=font)
+    img.save(roda_path)

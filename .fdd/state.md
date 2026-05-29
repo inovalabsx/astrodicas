@@ -112,9 +112,11 @@
 
 ## Próximos passos
 
-- [x] Bot de vendas implementado (src/vendas_bot/) — pendente deploy no Coolify
-- [ ] **Executar migration SQL** no banco astrodicas (ALTER TABLE assinantes)
-- [ ] **Configurar deploy** no Coolify: app separado `astrodicas-vendas-bot`
-- [ ] **Configurar env vars** no Coolify: TELEGRAM_VENDAS_BOT_TOKEN, ADMIN_USER_ID, PIX_CHAVE, DATABASE_URL_ASTRODICAS, OMINIROUTE_API_KEY
-- [ ] **Setar webhook** do Telegram: `https://bot-vendas.astrodicas.inovalabx.com.br/webhook`
-- [ ] Testar scheduler automático no próximo horário agendado (06:00)
+- [x] Bot de vendas implementado (src/vendas_bot/)
+- [x] Migration SQL executada no banco astrodicas (4 colunas)
+- [x] Deploy no Coolify: app `astrodicas-vendas-bot` rodando
+- [x] 15 env vars configuradas (TELEGRAM_VENDAS_BOT_TOKEN, ADMIN_USER_ID, PIX_CHAVE, DATABASE_URL, OMINIROUTE_API_KEY, APP_MODULE, PORT, etc.)
+- [x] Domínio: `https://bot.astrodicas.vendas.inovalabx.com.br`
+- [x] Webhook Telegram configurado (SSL Let's Encrypt válido)
+- [ ] **Testar scheduler automático** no próximo horário agendado (06:00)
+- [ ] **Testar onboarding completo** — /start → /assinar → simular pagamento → /ativar

@@ -30,13 +30,13 @@ DIAS_SEMANA = [
 
 # Temas de imagem para cada dia da semana
 IMAGEM_DIA_PROMPTS = {
-    "Segunda": "Imagem astrológica mística, fundo roxo escuro com estrelas douradas, texto grande em português '🌙 HORÓSCOPO DE SEGUNDA-FEIRA' em letras cursivas douradas no centro, borda ornamental com símbolos zodiacais, atmosfera de começo de semana e renovação, 1024x1024",
-    "Terça": "Imagem astrológica mística, fundo azul marinho profundo com nebulosas prateadas, texto grande em português '✨ HORÓSCOPO DE TERÇA-FEIRA' em letras cursivas prateadas no centro, chamas de velas ao redor, atmosfera de energia e ação, 1024x1024",
-    "Quarta": "Imagem astrológica mística, fundo verde escuro com partículas douradas, texto grande em português '🔮 HORÓSCOPO DE QUARTA-FEIRA' em letras cursivas verde-ouro no centro, cristais e runas ao redor, atmosfera de comunicação e sabedoria, 1024x1024",
-    "Quinta": "Imagem astrológica mística, fundo vinho com fios de luz dourada, texto grande em português '🌟 HORÓSCOPO DE QUINTA-FEIRA' em letras cursivas douradas no centro, raios de sol ao fundo, atmosfera de prosperidade e expansão, 1024x1024",
-    "Sexta": "Imagem astrológica mística, fundo pôr-do-sol alaranjado com estrelas cintilantes, texto grande em português '🌅 HORÓSCOPO DE SEXTA-FEIRA' em letras cursivas cor de cobre no centro, contornos de montanhas ao fundo, atmosfera de celebração e amor, 1024x1024",
-    "Sábado": "Imagem astrológica mística, fundo lilás com lua crescente brilhante, texto grande em português '🌙 HORÓSCOPO DE SÁBADO' em letras cursivas peroladas no centro, fases da lua ao redor, atmosfera de descanso e introspecção, 1024x1024",
-    "Domingo": "Imagem astrológica mística, fundo dourado suave com luz do amanhecer, texto grande em português '☀️ HORÓSCOPO DE DOMINGO' em letras cursivas douradas no centro, raios solares e asas, atmosfera de renovação e paz interior, 1024x1024",
+    "Segunda": "Imagem astrológica mística, fundo roxo escuro com estrelas douradas, borda ornamental com símbolos zodiacais, atmosfera de começo de semana e renovação, sem texto algum na imagem, 1024x1024",
+    "Terça": "Imagem astrológica mística, fundo azul marinho profundo com nebulosas prateadas, chamas de velas ao redor, atmosfera de energia e ação, sem texto algum na imagem, 1024x1024",
+    "Quarta": "Imagem astrológica mística, fundo verde escuro com partículas douradas, cristais e runas ao redor, atmosfera de comunicação e sabedoria, sem texto algum na imagem, 1024x1024",
+    "Quinta": "Imagem astrológica mística, fundo vinho com fios de luz dourada, raios de sol ao fundo, atmosfera de prosperidade e expansão, sem texto algum na imagem, 1024x1024",
+    "Sexta": "Imagem astrológica mística, fundo pôr-do-sol alaranjado com estrelas cintilantes, contornos de montanhas ao fundo, atmosfera de celebração e amor, sem texto algum na imagem, 1024x1024",
+    "Sábado": "Imagem astrológica mística, fundo lilás com lua crescente brilhante, fases da lua ao redor, atmosfera de descanso e introspecção, sem texto algum na imagem, 1024x1024",
+    "Domingo": "Imagem astrológica mística, fundo dourado suave com luz do amanhecer, raios solares e asas, atmosfera de renovação e paz interior, sem texto algum na imagem, 1024x1024",
 }
 
 # Cache da imagem do dia para não regenerar
