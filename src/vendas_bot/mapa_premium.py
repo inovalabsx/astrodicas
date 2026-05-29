@@ -27,6 +27,7 @@ from urllib import request as urllib_request
 from urllib.error import HTTPError, URLError
 
 from PIL import Image, ImageDraw, ImageFont
+from fpdf import FPDF
 
 from src.vendas_bot.settings import settings
 
@@ -145,47 +146,44 @@ def _gerar_secoes_llm(
     cidade: str,
     tipo: str,
 ) -> Optional[list[dict]]:
-    """Gera seções estruturadas via LLM (OmniRoute) com retry obrigatório."""
+    """Gera seções estruturadas via LLM em markdown e parseia localmente."""
     if not settings.ominiroute_api_key:
         logger.warning("OMINIROUTE_API_KEY ausente — usando fallback")
         return None
 
     asc_txt = f"{ascendente.get('signo', 'Desconhecido')} {float(ascendente.get('grau_signo', 0)):.0f}°"
     tipo_nome = TIPO_NOMES.get(tipo, "Mapa Astral Completo")
+    qtd_secoes = 14 if tipo != "astral" else 15
 
     instrucoes = (
         "Você é astrólogo profissional brasileiro e redator premium. "
-        "Retorne APENAS JSON válido (sem markdown, sem comentários), "
-        "com a chave 'secoes' contendo array de objetos no formato: "
-        "{titulo, subtitulo, ordem, conteudo}. "
-        "Cada 'conteudo' deve ter entre 900 e 1600 caracteres, português-BR natural, "
-        "texto útil e específico, com linguagem elegante e prática. "
-        "Não repita frases entre seções."
+        "Responda APENAS em markdown estruturado, sem JSON, sem explicações extras. "
+        "Formato obrigatório por seção:\n"
+        "## <título da seção>\n"
+        "### <subtítulo curto>\n"
+        "<conteúdo da seção em 3-6 parágrafos>\n\n"
+        f"Gere exatamente {qtd_secoes} seções. "
+        "Cada seção deve ter conteúdo consistente, específico e útil, em português-BR natural. "
+        "Não repetir frases entre seções."
     )
 
-    pedido = {
-        "tipo": tipo,
-        "tipo_nome": tipo_nome,
-        "nome": nome,
-        "signo": signo,
-        "ascendente": asc_txt,
-        "cidade": cidade,
-        "regras": {
-            "quantidade_secoes": 14 if tipo != "astral" else 15,
-            "ordem_inicial": 1,
-            "campos": ["titulo", "subtitulo", "ordem", "conteudo"],
-        },
-    }
+    pedido = (
+        f"Tipo: {tipo_nome} ({tipo})\n"
+        f"Nome: {nome}\n"
+        f"Signo solar: {signo}\n"
+        f"Ascendente: {asc_txt}\n"
+        f"Cidade: {cidade}\n"
+        f"Quantidade de seções: {qtd_secoes}\n"
+    )
 
     payload = json.dumps({
         "model": settings.llm_model_text,
         "messages": [
             {"role": "system", "content": instrucoes},
-            {"role": "user", "content": json.dumps(pedido, ensure_ascii=False)},
+            {"role": "user", "content": pedido},
         ],
         "temperature": 0.8,
         "max_tokens": 7000,
-        "response_format": {"type": "json_object"},
     }).encode("utf-8")
 
     req = urllib_request.Request(
@@ -198,6 +196,43 @@ def _gerar_secoes_llm(
         method="POST",
     )
 
+    def _parse_markdown_secoes(md: str) -> list[dict]:
+        txt = (md or "").replace("\r\n", "\n").strip()
+        if not txt:
+            return []
+
+        linhas = txt.split("\n")
+        secoes = []
+        atual = None
+
+        def _finalizar(sec):
+            if not sec:
+                return
+            conteudo = "\n".join([l for l in sec["conteudo"] if l.strip()]).strip()
+            if sec["titulo"].strip() and conteudo:
+                secoes.append({
+                    "titulo": sec["titulo"].strip(),
+                    "subtitulo": sec["subtitulo"].strip(),
+                    "ordem": len(secoes) + 1,
+                    "conteudo": conteudo,
+                })
+
+        for linha in linhas:
+            l = linha.strip()
+            if l.startswith("## "):
+                _finalizar(atual)
+                atual = {"titulo": l[3:].strip(), "subtitulo": "", "conteudo": []}
+                continue
+            if atual is None:
+                continue
+            if l.startswith("### ") and not atual["subtitulo"]:
+                atual["subtitulo"] = l[4:].strip()
+                continue
+            atual["conteudo"].append(linha)
+
+        _finalizar(atual)
+        return secoes
+
     max_tentativas = 3
     backoff_segundos = 2
 
@@ -206,59 +241,12 @@ def _gerar_secoes_llm(
             with urllib_request.urlopen(req, timeout=180) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
                 content = result["choices"][0]["message"].get("content", "")
-
-                # Alguns providers retornam conteúdo com markdown (```json ... ```)
-                # ou com texto antes/depois do JSON. Tentamos extrair o objeto válido.
-                content_txt = str(content).strip()
-                if content_txt.startswith("```"):
-                    content_txt = content_txt.strip("`")
-                    if content_txt.lower().startswith("json"):
-                        content_txt = content_txt[4:].strip()
-
-                try:
-                    data = json.loads(content_txt)
-                except json.JSONDecodeError:
-                    ini = content_txt.find("{")
-                    fim = content_txt.rfind("}")
-                    if ini != -1 and fim != -1 and fim > ini:
-                        data = json.loads(content_txt[ini:fim+1])
-                    else:
-                        raise
-
-                secoes = data.get("secoes") if isinstance(data, dict) else None
-                if (not isinstance(secoes, list)) and isinstance(data, dict):
-                    # fallback leve: aceita payload com chave alternativa comum
-                    alt = data.get("sections")
-                    if isinstance(alt, list):
-                        secoes = alt
-                if not isinstance(secoes, list):
-                    raise ValueError("LLM retornou formato inválido (sem lista de seções)")
-
-                normalizadas = []
-                for i, s in enumerate(secoes, start=1):
-                    if not isinstance(s, dict):
-                        continue
-                    titulo = str(s.get("titulo", "")).strip()
-                    subtitulo = str(s.get("subtitulo", "")).strip()
-                    conteudo = str(s.get("conteudo", "")).strip()
-                    ordem = s.get("ordem", i)
-                    try:
-                        ordem = int(ordem)
-                    except Exception:
-                        ordem = i
-                    if not titulo or not conteudo:
-                        continue
-                    normalizadas.append({
-                        "titulo": titulo,
-                        "subtitulo": subtitulo or "",
-                        "ordem": ordem,
-                        "conteudo": conteudo,
-                    })
+                normalizadas = _parse_markdown_secoes(str(content))
 
                 if len(normalizadas) < 10:
-                    raise ValueError(f"LLM retornou poucas seções ({len(normalizadas)})")
+                    raise ValueError(f"LLM retornou poucas seções parseáveis ({len(normalizadas)})")
 
-                logger.info(f"LLM premium ok na tentativa {tentativa}/{max_tentativas}")
+                logger.info(f"LLM premium markdown ok na tentativa {tentativa}/{max_tentativas}")
                 return normalizadas
 
         except (HTTPError, URLError, TimeoutError, ValueError, KeyError, json.JSONDecodeError) as e:
@@ -280,7 +268,6 @@ def _gerar_secoes_llm(
 
     return None
 
-from fpdf import FPDF
 
 
 class FPDFPremium(FPDF):
