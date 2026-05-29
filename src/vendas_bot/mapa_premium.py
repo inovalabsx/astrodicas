@@ -205,9 +205,32 @@ def _gerar_secoes_llm(
         try:
             with urllib_request.urlopen(req, timeout=180) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
-                content = result["choices"][0]["message"]["content"]
-                data = json.loads(content)
+                content = result["choices"][0]["message"].get("content", "")
+
+                # Alguns providers retornam conteúdo com markdown (```json ... ```)
+                # ou com texto antes/depois do JSON. Tentamos extrair o objeto válido.
+                content_txt = str(content).strip()
+                if content_txt.startswith("```"):
+                    content_txt = content_txt.strip("`")
+                    if content_txt.lower().startswith("json"):
+                        content_txt = content_txt[4:].strip()
+
+                try:
+                    data = json.loads(content_txt)
+                except json.JSONDecodeError:
+                    ini = content_txt.find("{")
+                    fim = content_txt.rfind("}")
+                    if ini != -1 and fim != -1 and fim > ini:
+                        data = json.loads(content_txt[ini:fim+1])
+                    else:
+                        raise
+
                 secoes = data.get("secoes") if isinstance(data, dict) else None
+                if (not isinstance(secoes, list)) and isinstance(data, dict):
+                    # fallback leve: aceita payload com chave alternativa comum
+                    alt = data.get("sections")
+                    if isinstance(alt, list):
+                        secoes = alt
                 if not isinstance(secoes, list):
                     raise ValueError("LLM retornou formato inválido (sem lista de seções)")
 
