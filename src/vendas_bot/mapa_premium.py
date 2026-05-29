@@ -22,8 +22,11 @@ import os
 import math
 from datetime import date, datetime
 from typing import Optional
+from urllib import request as urllib_request
 
 from PIL import Image, ImageDraw, ImageFont
+
+from src.vendas_bot.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +124,10 @@ PLANETAS_SIMBOLOS = {
     "Sol": "☉",
     "Lua": "☽",
     "Mercúrio": "☿",
+    "Venus": "♀",
     "Vênus": "♀",
     "Marte": "♂",
+    "Jupiter": "♃",
     "Júpiter": "♃",
     "Saturno": "♄",
     "Urano": "♅",
@@ -130,7 +135,105 @@ PLANETAS_SIMBOLOS = {
     "Plutão": "♇",
 }
 
-# ── Classe FPDF com footer automático ──────────────────────────────────────────
+
+def _gerar_secoes_llm(
+    nome: str,
+    signo: str,
+    ascendente: dict,
+    cidade: str,
+    tipo: str,
+) -> Optional[list[dict]]:
+    """Gera seções estruturadas via LLM (OmniRoute)."""
+    if not settings.ominiroute_api_key:
+        logger.warning("OMINIROUTE_API_KEY ausente — usando fallback")
+        return None
+
+    asc_txt = f"{ascendente.get('signo', 'Desconhecido')} {float(ascendente.get('grau_signo', 0)):.0f}°"
+    tipo_nome = TIPO_NOMES.get(tipo, "Mapa Astral Completo")
+
+    instrucoes = (
+        "Você é astrólogo profissional brasileiro e redator premium. "
+        "Retorne APENAS JSON válido (sem markdown, sem comentários), "
+        "com a chave 'secoes' contendo array de objetos no formato: "
+        "{titulo, subtitulo, ordem, conteudo}. "
+        "Cada 'conteudo' deve ter entre 900 e 1600 caracteres, português-BR natural, "
+        "texto útil e específico, com linguagem elegante e prática. "
+        "Não repita frases entre seções."
+    )
+
+    pedido = {
+        "tipo": tipo,
+        "tipo_nome": tipo_nome,
+        "nome": nome,
+        "signo": signo,
+        "ascendente": asc_txt,
+        "cidade": cidade,
+        "regras": {
+            "quantidade_secoes": 14 if tipo != "astral" else 15,
+            "ordem_inicial": 1,
+            "campos": ["titulo", "subtitulo", "ordem", "conteudo"],
+        },
+    }
+
+    payload = json.dumps({
+        "model": settings.llm_model_text,
+        "messages": [
+            {"role": "system", "content": instrucoes},
+            {"role": "user", "content": json.dumps(pedido, ensure_ascii=False)},
+        ],
+        "temperature": 0.8,
+        "max_tokens": 7000,
+        "response_format": {"type": "json_object"},
+    }).encode("utf-8")
+
+    req = urllib_request.Request(
+        f"{settings.llm_base_url}/chat/completions",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {settings.ominiroute_api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=180) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            content = result["choices"][0]["message"]["content"]
+            data = json.loads(content)
+            secoes = data.get("secoes") if isinstance(data, dict) else None
+            if not isinstance(secoes, list):
+                logger.warning("LLM retornou formato inválido (sem lista de seções)")
+                return None
+
+            normalizadas = []
+            for i, s in enumerate(secoes, start=1):
+                if not isinstance(s, dict):
+                    continue
+                titulo = str(s.get("titulo", "")).strip()
+                subtitulo = str(s.get("subtitulo", "")).strip()
+                conteudo = str(s.get("conteudo", "")).strip()
+                ordem = s.get("ordem", i)
+                try:
+                    ordem = int(ordem)
+                except Exception:
+                    ordem = i
+                if not titulo or not conteudo:
+                    continue
+                normalizadas.append({
+                    "titulo": titulo,
+                    "subtitulo": subtitulo or "",
+                    "ordem": ordem,
+                    "conteudo": conteudo,
+                })
+
+            if len(normalizadas) < 10:
+                logger.warning(f"LLM retornou poucas seções ({len(normalizadas)}) — usando fallback")
+                return None
+            return normalizadas
+    except Exception as e:
+        logger.warning(f"Erro na chamada LLM (mapa premium): {e}")
+        return None
 
 from fpdf import FPDF
 
@@ -695,16 +798,10 @@ def gerar_mapa_premium(
             logger.warning(f"Astro math indisponível: {e}")
 
         # ── 4. Gerar seções ───────────────────────────────────────────────
-        secoes = None
-        try:
-            if False:  # Placeholder para LLM futura
-                pass
-        except Exception as e:
-            logger.warning(f"Erro na LLM, usando fallback: {e}")
-            secoes = None
+        secoes = _gerar_secoes_llm(nome, signo, ascendente, cidade, tipo)
 
         if not secoes or not isinstance(secoes, list) or len(secoes) < 8:
-            # Fallback completo — textos EXPANDIDOS (300+ palavras cada)
+            # Fallback completo quando LLM falha
             secoes = _gerar_fallback_completo(
                 nome, signo, ascendente, cidade, tipo
             )
