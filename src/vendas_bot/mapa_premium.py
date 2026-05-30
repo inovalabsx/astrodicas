@@ -164,6 +164,8 @@ def _gerar_secoes_llm(
         "<conteúdo da seção em 4-7 parágrafos, com boa densidade e exemplos práticos>\n\n"
         f"Gere exatamente {qtd_secoes} seções. "
         "Cada seção deve ter conteúdo consistente, específico e útil, em português-BR natural. "
+        "Em TODAS as seções, mencionar explicitamente e de forma natural o signo solar e/ou ascendente da pessoa, "
+        "conectando a interpretação ao perfil dela. "
         "Não repetir frases entre seções."
     )
 
@@ -597,48 +599,70 @@ def _pdf_page_sumario(pdf: FPDFPremium, secoes: list, paleta: dict, nome: str, t
     pdf.add_page()
     w, h = 210, 297
 
-    # Header mais compacto para garantir o índice em uma página
-    header_h = 42
+    # Ajuste fino por tipo: sinastria pode respirar mais; demais ficam compactos
+    if tipo == "sinastria":
+        header_h = 46
+        titulo_size = 19
+        subtitulo_size = 10
+        card_h = 13
+        item_titulo_size = 10
+        item_sub_size = 8
+        ln_item = 3
+        y_title = 8
+        y_sub = 7
+        y_after_header = 6
+    else:
+        header_h = 42
+        titulo_size = 18
+        subtitulo_size = 9
+        card_h = 12
+        item_titulo_size = 9
+        item_sub_size = 7
+        ln_item = 2
+        y_title = 7
+        y_sub = 6
+        y_after_header = 5
+
     pdf.set_fill_color(*paleta["cor_principal"])
     pdf.rect(0, 0, w, header_h, style='F')
 
-    pdf.set_font("DejaVu", "B", 18)
+    pdf.set_font("DejaVu", "B", titulo_size)
     pdf.set_text_color(*paleta["cor_texto"])
-    pdf.set_xy(15, 7)
+    pdf.set_xy(15, y_title)
     pdf.cell(0, 10, f"{paleta['icone_titulo']} Índice do seu Mapa", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_font("DejaVu", "", 9)
+    pdf.set_font("DejaVu", "", subtitulo_size)
     pdf.set_text_color(*paleta["cor_destaque"])
     pdf.cell(0, 5, f"{TIPO_NOMES.get(tipo, tipo)} — {nome}",
              new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_y(header_h + 5)
+    pdf.set_y(header_h + y_after_header)
 
     # ── Lista de seções (FUNDO ESCURO + TEXTO CLARO) ─────────────────
     for idx, s in enumerate(sorted(secoes, key=lambda x, fallback=999: x.get("ordem", fallback))):
         pdf.set_x(18)
 
-        # Card compacto para evitar quebra desnecessária do índice
+        # Card com compactação adaptativa por tipo
         pdf.set_fill_color(*paleta["cor_card"])
         pdf.set_draw_color(*paleta["cor_linha"])
         y_card = pdf.get_y()
-        pdf.rect(16, y_card, w - 32, 12, style='DF')  # DF = fill + draw
+        pdf.rect(16, y_card, w - 32, card_h, style='DF')  # DF = fill + draw
 
         # Título
-        pdf.set_font("DejaVu", "B", 9)
+        pdf.set_font("DejaVu", "B", item_titulo_size)
         pdf.set_text_color(*paleta["cor_texto"])
         pdf.set_xy(20, y_card + 0.5)
         pdf.cell(0, 6, f"{s.get('ordem', idx+1):02d}.  {s['titulo']}",
                  new_x="LMARGIN", new_y="NEXT")
 
         # Subtítulo
-        pdf.set_font("DejaVu", "", 7)
+        pdf.set_font("DejaVu", "", item_sub_size)
         pdf.set_text_color(*paleta["cor_tag"])
-        pdf.set_xy(26, y_card + 6)
+        pdf.set_xy(26, y_card + y_sub)
         pdf.cell(0, 5, f"{s.get('subtitulo', '')}",
                  new_x="LMARGIN", new_y="NEXT")
 
-        pdf.ln(2)
+        pdf.ln(ln_item)
 
 
 def _pdf_page_roda(pdf: FPDFPremium, roda_path: str, assinatura: str):
