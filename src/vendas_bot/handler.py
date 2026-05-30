@@ -11,6 +11,7 @@ Fluxo vendável simplificado:
 import logging
 import os
 from datetime import date, datetime
+from decimal import Decimal
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -31,6 +32,16 @@ from src.vendas_bot.models_vendas import (
     ativar_assinante,
     registrar_pagamento,
     descobrir_signo_por_data,
+)
+from src.vendas_bot.payments import payment_provider
+from src.vendas_bot.afiliados import (
+    get_or_create_afiliado,
+    registrar_lead_por_codigo,
+    atualizar_pix_afiliado,
+    liberar_comissoes_vencidas,
+    registrar_comissao_por_pagamento,
+    saldo_afiliado,
+    solicitar_saque,
 )
 
 logger = logging.getLogger(__name__)
@@ -141,21 +152,64 @@ async def _gerar_e_enviar_mapa_premium(update: Update, context, assinante) -> bo
 # Estados pós-pagamento (coleta de dados)
 (DADOS_NOME, DADOS_NASC, DADOS_HORA, DADOS_CIDADE) = range(10, 14)
 
-# --- PIX info ---
-PIX_MSG = (
-    "💳 *Para ativar, é só fazer o PIX:*\n\n"
-    f"📱 *Chave PIX:* `{settings.pix_chave}`\n"
-    f"🏦 *Banco:* {settings.pix_banco}\n"
-    f"👤 *Nome:* {settings.pix_nome}\n"
-    f"💰 *Valor:* R$ {settings.preco_plano_lua:.2f}\n\n"
-    "📌 Use /pago aqui no bot depois de pagar pra avisar a gente! 💚"
-)
+# --- Pagamento info ---
+def _mensagem_pix_manual(valor: float) -> str:
+    return (
+        "💳 *Para ativar, é só fazer o PIX:*\n\n"
+        f"📱 *Chave PIX:* `{settings.pix_chave}`\n"
+        f"🏦 *Banco:* {settings.pix_banco}\n"
+        f"👤 *Nome:* {settings.pix_nome}\n"
+        f"💰 *Valor:* R$ {valor:.2f}\n\n"
+        "📌 Depois use /pago aqui no bot pra avisar a gente. 💚"
+    )
+
+
+def _get_or_create_assinante(user):
+    assinante = buscar_assinante(user.id)
+    if assinante:
+        return assinante
+    return criar_assinante(
+        telegram_id=user.id,
+        primeiro_nome=user.first_name or "Anônimo",
+        username=user.username,
+    )
+
+
+def _criar_pagamento(assinante_id: int, valor: float, tipo: str, payer_ref: str):
+    intent = payment_provider.create_payment(
+        amount=valor,
+        description=tipo,
+        payer_ref=payer_ref,
+    )
+    pagamento = registrar_pagamento(
+        assinante_id=assinante_id,
+        valor=valor,
+        tipo=tipo,
+        status=intent.status,
+        pagamento_id=intent.external_id,
+    )
+    return pagamento, intent
+
 
 # --- Comandos ---
 
 async def start(update: Update, context):
     """Menu principal — apresentação acolhedora e vendável."""
     user = update.effective_user
+
+    # Libera comissões vencidas em oportunidades de entrada no fluxo
+    try:
+        liberar_comissoes_vencidas()
+    except Exception as e:
+        logger.warning(f"Erro ao liberar comissões vencidas: {e}")
+
+    # Captura referral via deep link: /start AF000123
+    if context.args:
+        codigo_ref = (context.args[0] or "").strip().upper()
+        if codigo_ref and codigo_ref.startswith("AF"):
+            ok_ref = registrar_lead_por_codigo(codigo_ref, user.id, origem="telegram_start")
+            if ok_ref:
+                await update.message.reply_text("🎁 Você entrou por link de indicação e já garantiu benefícios especiais!")
 
     # Verificar se usuário já pagou mas não deu os dados ainda
     assinante = buscar_assinante(user.id)
@@ -169,8 +223,8 @@ async def start(update: Update, context):
         return
 
     keyboard = [
-        [InlineKeyboardButton("🌙 Assinar Plano Lua — R$9,90/mês", callback_data="assinar_plano_lua")],
-        [InlineKeyboardButton("🔮 Comprar Mapa Avulso — R$19,90", callback_data="comprar_mapa")],
+        [InlineKeyboardButton("🌙 Assinar Plano Lua — R$16,90/mês", callback_data="assinar_plano_lua")],
+        [InlineKeyboardButton("🔮 Comprar Mapa — R$19,90", callback_data="comprar_mapa")],
         [InlineKeyboardButton("📋 Minhas Assinaturas", callback_data="minhas_assinaturas")],
         [InlineKeyboardButton("❓ Ajuda", callback_data="ajuda")],
     ]
@@ -219,13 +273,13 @@ async def help_cmd(update: Update, context):
     """Comando /ajuda."""
     await update.message.reply_text(
         "❓ *Ajuda — AstroDicas Vendas*\n\n"
-        "🌙 *Plano Lua* — R$9,90/mês\n"
+        "🌙 *Plano Lua* — R$16,90/mês\n"
         "  • Horóscopo diário personalizado no seu DM 🪐\n"
         "  • Previsão semanal todo sábado 📅\n"
         "  • Lembrete de luas cheias e novas 🌕\n"
         "  • 🎁 *Mapa Astral PDF de brinde* ao assinar!\n"
-        "  • 30% OFF em todos os mapas avulsos 🔥\n\n"
-        "🔮 *Mapas Avulsos* — R$19,90 (assinante: R$13,93)\n"
+        "  • 30% OFF em todos os mapas 🔥\n\n"
+        "🔮 *Mapa* — R$19,90 (assinante: R$13,93)\n"
         "  • Mapa Astral Completo\n"
         "  • Sinastria (Amor) 💕\n"
         "  • Mapa da Carreira 💼\n"
@@ -236,6 +290,95 @@ async def help_cmd(update: Update, context):
         "📞 *Dúvidas:* Fale com @astro_dicas\n\n"
         "Use /start para voltar ao menu principal ✨"
     )
+
+
+async def afiliado_command(update: Update, context):
+    """Ativa/consulta conta de afiliado e retorna link próprio."""
+    user = update.effective_user
+    assinante = _get_or_create_assinante(user)
+    afiliado = get_or_create_afiliado(assinante.id)
+    link = f"https://t.me/{context.bot.username}?start={afiliado.codigo}"
+
+    await update.message.reply_text(
+        "🤝 *Programa de Afiliados AstroDicas*\n\n"
+        f"🔗 *Seu código:* `{afiliado.codigo}`\n"
+        f"🔗 *Seu link:* {link}\n\n"
+        "📌 Regras:\n"
+        "• Comissão: *40%* por venda confirmada\n"
+        "• Liberação: *D+7*\n"
+        "• Saque mínimo: *R$ 10,00*\n"
+        "• Chave PIX obrigatória para saque\n\n"
+        "Comandos:\n"
+        "`/pix <sua_chave>` para cadastrar PIX\n"
+        "`/afiliado_saldo` para ver saldo\n"
+        "`/afiliado_sacar` para solicitar saque"
+    )
+
+
+async def afiliado_pix_command(update: Update, context):
+    """Cadastra chave PIX do afiliado."""
+    if not context.args:
+        await update.message.reply_text("❌ Uso: `/pix <sua_chave_pix>`")
+        return
+
+    user = update.effective_user
+    assinante = _get_or_create_assinante(user)
+    get_or_create_afiliado(assinante.id)
+
+    chave = " ".join(context.args).strip()
+    if len(chave) < 4:
+        await update.message.reply_text("❌ Chave PIX inválida.")
+        return
+
+    if atualizar_pix_afiliado(assinante.id, chave):
+        await update.message.reply_text("✅ Chave PIX cadastrada com sucesso!")
+    else:
+        await update.message.reply_text("❌ Não consegui cadastrar sua chave PIX agora.")
+
+
+async def afiliado_saldo_command(update: Update, context):
+    """Mostra saldos do afiliado."""
+    user = update.effective_user
+    assinante = buscar_assinante(user.id)
+    if not assinante:
+        await update.message.reply_text("Você ainda não é afiliado. Use /afiliado primeiro.")
+        return
+
+    try:
+        liberar_comissoes_vencidas()
+    except Exception as e:
+        logger.warning(f"Erro ao liberar comissões no saldo: {e}")
+
+    liberado, pendente = saldo_afiliado(assinante.id)
+    await update.message.reply_text(
+        "💰 *Saldo de Afiliado*\n\n"
+        f"✅ Liberado: R$ {liberado:.2f}\n"
+        f"⏳ Pendente (D+7): R$ {pendente:.2f}\n\n"
+        "Para sacar: /afiliado_sacar"
+    )
+
+
+async def afiliado_sacar_command(update: Update, context):
+    """Solicita saque do saldo liberado."""
+    user = update.effective_user
+    assinante = buscar_assinante(user.id)
+    if not assinante:
+        await update.message.reply_text("Você ainda não é afiliado. Use /afiliado primeiro.")
+        return
+
+    try:
+        liberar_comissoes_vencidas()
+    except Exception as e:
+        logger.warning(f"Erro ao liberar comissões no saque: {e}")
+
+    resultado = solicitar_saque(assinante.id, modo=settings.payment_mode)
+    if resultado.ok:
+        await update.message.reply_text(
+            f"✅ {resultado.mensagem}\n"
+            f"🧾 Saque ID: `{resultado.saque_id}`"
+        )
+    else:
+        await update.message.reply_text(f"❌ {resultado.mensagem}")
 
 
 async def pago_command(update: Update, context):
@@ -345,7 +488,7 @@ async def ativar_command(update: Update, context):
         return
 
     if ativar_assinante(assinante.id):
-        from src.database.models import Pagamento
+        from src.database.models import Pagamento, Compra
         from src.database import SessionLocal
 
         with SessionLocal() as session:
@@ -360,7 +503,36 @@ async def ativar_command(update: Update, context):
             )
             if pag:
                 pag.status = "confirmado"
+
+                compra = (
+                    session.query(Compra)
+                    .filter(Compra.pagamento_id == pag.id)
+                    .first()
+                )
+                if not compra:
+                    produto = "plano_lua" if pag.tipo == "assinatura" else str(pag.tipo)
+                    compra = Compra(
+                        assinante_id=assinante.id,
+                        pagamento_id=pag.id,
+                        produto=produto,
+                        valor=Decimal(str(pag.valor or 0)),
+                        ativo=True,
+                    )
+                    session.add(compra)
+                else:
+                    compra.ativo = True
+
                 session.commit()
+
+                try:
+                    registrar_comissao_por_pagamento(
+                        indicado_telegram_id=telegram_id,
+                        assinante_id=assinante.id,
+                        pagamento_id=pag.id,
+                        valor_venda=Decimal(str(pag.valor or 0)),
+                    )
+                except Exception as e:
+                    logger.warning(f"Erro ao registrar comissão afiliado: {e}")
 
         # Notificar usuário
         try:
@@ -395,32 +567,26 @@ async def button_handler(update: Update, context):
     data = query.data
 
     if data == "assinar_plano_lua":
-        # Mostra explicação + PIX na sequência (sem perguntar nome)
         user = update.effective_user
-        assinante = criar_assinante(
-            telegram_id=user.id,
-            primeiro_nome=user.first_name or "Anônimo",
-            username=user.username,
-        )
-        pagamento = registrar_pagamento(
+        assinante = _get_or_create_assinante(user)
+        _, intent = _criar_pagamento(
             assinante_id=assinante.id,
             valor=settings.preco_plano_lua,
             tipo="assinatura",
+            payer_ref=str(user.id),
         )
 
         await query.edit_message_text(
-            "🌙 *Plano Lua — R$9,90/mês*\n\n"
+            "🌙 *Plano Lua — R$16,90/mês*\n\n"
             "Com ele você recebe:\n"
-            "🪐 *Horóscopo diário* — todo dia uma mensagem dos astros "
-            "feita especialmente *para você* 🌟\n"
-            "📅 *Previsão semanal* — todo sábado\n"
-            "🌕 *Luas cheias e novas* — lembrete na hora certa\n"
-            "🎁 *Mapa Astral PDF de brinde* assim que assinar!\n"
-            "🔥 *30% OFF* em mapas avulsos\n\n"
-            f"Para ativar, escolha *Plano Lua* e faça o PIX:"
+            "🪐 *Horóscopo diário personalizado*\n"
+            "📅 *Previsão semanal*\n"
+            "🌕 *Alertas lunares*\n"
+            "🎁 *Mapa Astral PDF de brinde*\n"
+            "🔥 *30% OFF* em todos os mapas\n\n"
+            "Pra ativar agora, siga o pagamento abaixo:"
         )
-        # Envia PIX como mensagem separada (edit_message_text não aceita)
-        await query.message.reply_text(PIX_MSG)
+        await query.message.reply_text(intent.instructions if intent.provider != "pix_api" else _mensagem_pix_manual(settings.preco_plano_lua))
         return
 
     elif data == "comprar_mapa":
@@ -433,10 +599,13 @@ async def button_handler(update: Update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🔮 *Mapas Avulsos*\n\n"
-            "Escolha o mapa que deseja:\n\n"
-            "💡 *Assinantes do Plano Lua têm 30% OFF!* "
-            "(R$13,93 em vez de R$19,90)",
+            "🔮 *Mapas*\n\n"
+            "Escolha o tipo ideal pra você:\n\n"
+            "• *Astral Completo:* visão geral da sua personalidade e ciclos\n"
+            "• *Sinastria:* compatibilidade amorosa\n"
+            "• *Carreira:* talentos, desafios e direção profissional\n"
+            "• *Revolução Solar:* tendências do seu novo ano\n\n"
+            "💡 *Assinantes do Plano Lua têm 30% OFF* (R$13,93)",
             reply_markup=reply_markup,
         )
         return
@@ -493,8 +662,8 @@ async def button_handler(update: Update, context):
 
     elif data == "voltar_menu":
         keyboard = [
-            [InlineKeyboardButton("🌙 Assinar Plano Lua (R$9,90)", callback_data="assinar_plano_lua")],
-            [InlineKeyboardButton("🔮 Comprar Mapa Avulso", callback_data="comprar_mapa")],
+            [InlineKeyboardButton("🌙 Assinar Plano Lua (R$16,90)", callback_data="assinar_plano_lua")],
+            [InlineKeyboardButton("🔮 Comprar Mapa", callback_data="comprar_mapa")],
             [InlineKeyboardButton("📋 Minhas Assinaturas", callback_data="minhas_assinaturas")],
             [InlineKeyboardButton("❓ Ajuda", callback_data="ajuda")],
         ]
@@ -505,7 +674,7 @@ async def button_handler(update: Update, context):
         )
         return
 
-    # Callbacks de mapa avulso
+    # Callbacks de mapa
     elif data.startswith("mapa_"):
         mapa_tipos = {
             "mapa_astral": "astral",
@@ -521,35 +690,27 @@ async def button_handler(update: Update, context):
                 "carreira": "Mapa da Carreira",
                 "revolucao": "Revolução Solar",
             }
-            # Cria assinante anônimo e já mostra PIX
+
             user = update.effective_user
-            assinante = criar_assinante(
-                telegram_id=user.id,
-                primeiro_nome=user.first_name or "Anônimo",
-                username=user.username,
-            )
+            assinante = _get_or_create_assinante(user)
+
             preco = settings.preco_mapa_avulso
-            # Verificar desconto pra assinante
-            assinante_existente = buscar_assinante(user.id)
-            if assinante_existente and assinante_existente.ativo:
+            if assinante.ativo:
                 preco = round(preco * (1 - settings.desconto_assinante), 2)
 
-            pagamento = registrar_pagamento(
+            _, intent = _criar_pagamento(
                 assinante_id=assinante.id,
                 valor=preco,
                 tipo=f"mapa_{tipo}",
+                payer_ref=str(user.id),
             )
 
             await query.edit_message_text(
                 f"🔮 *{nomes[tipo]}*\n\n"
                 f"💵 *Valor:* R$ {preco:.2f}\n\n"
-                "Para comprar, é só fazer o PIX:"
+                "Perfeito! Aqui estão as instruções de pagamento:"
             )
-            msg_pix = PIX_MSG.replace(
-                f"R$ {settings.preco_plano_lua:.2f}",
-                f"R$ {preco:.2f}"
-            )
-            await query.message.reply_text(msg_pix)
+            await query.message.reply_text(intent.instructions if intent.provider != "pix_api" else _mensagem_pix_manual(preco))
             return
 
     return
@@ -741,6 +902,10 @@ async def criar_app() -> Application:
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("pago", pago_command))
     app.add_handler(CommandHandler("ativar", ativar_command))
+    app.add_handler(CommandHandler("afiliado", afiliado_command))
+    app.add_handler(CommandHandler("pix", afiliado_pix_command))
+    app.add_handler(CommandHandler("afiliado_saldo", afiliado_saldo_command))
+    app.add_handler(CommandHandler("afiliado_sacar", afiliado_sacar_command))
 
     # Conversation handler de dados
     app.add_handler(dados_conversation_handler())

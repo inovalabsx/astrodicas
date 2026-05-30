@@ -21,9 +21,14 @@ class VendasSettings:
     pix_banco: str = "Nubank"
 
     # Produtos
-    preco_plano_lua: float = 9.90
+    preco_plano_lua: float = 16.90
     preco_mapa_avulso: float = 19.90
     desconto_assinante: float = 0.30  # 30%
+
+    # Pagamentos
+    payment_mode: str = "simulado"  # simulado | pix_api
+    pix_api_base_url: str = ""
+    pix_api_key: str = ""
 
     # Herdados do settings global
     database_url: str = ""
@@ -48,6 +53,10 @@ class VendasSettings:
         self.pix_chave = os.getenv("PIX_CHAVE", self.pix_chave)
         self.pix_nome = os.getenv("PIX_NOME", self.pix_nome)
         self.pix_banco = os.getenv("PIX_BANCO", self.pix_banco)
+
+        self.payment_mode = os.getenv("PAYMENT_MODE", self.payment_mode).strip().lower() or "simulado"
+        self.pix_api_base_url = os.getenv("PIX_API_BASE_URL", "").strip()
+        self.pix_api_key = os.getenv("PIX_API_KEY", "").strip()
 
         # Herdar configurações globais
         self.database_url = os.getenv(

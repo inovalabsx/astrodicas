@@ -18,6 +18,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -114,6 +115,71 @@ class Compra(Base):
 
     assinante = relationship("Assinante", back_populates="compras")
     pagamento = relationship("Pagamento", back_populates="compras")
+
+
+class Afiliado(Base):
+    """Afiliados do programa de indicação."""
+
+    __tablename__ = "afiliados"
+
+    id = Column(Integer, primary_key=True)
+    assinante_id = Column(Integer, ForeignKey("assinantes.id"), nullable=False, unique=True)
+    codigo = Column(String(32), nullable=False, unique=True)
+    pix_chave = Column(Text, nullable=True)
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AfiliadoLead(Base):
+    """Lead atribuído por link de afiliado com janela de 30 dias."""
+
+    __tablename__ = "afiliado_leads"
+
+    id = Column(Integer, primary_key=True)
+    afiliado_id = Column(Integer, ForeignKey("afiliados.id"), nullable=False)
+    indicado_telegram_id = Column(Integer, nullable=False)
+    origem = Column(Text, default="telegram_start")
+    expira_em = Column(DateTime, nullable=False)
+    convertido_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("afiliado_id", "indicado_telegram_id", name="uq_afiliado_lead"),
+    )
+
+
+class AfiliadoComissao(Base):
+    """Comissões geradas por vendas atribuídas ao afiliado."""
+
+    __tablename__ = "afiliado_comissoes"
+
+    id = Column(Integer, primary_key=True)
+    afiliado_id = Column(Integer, ForeignKey("afiliados.id"), nullable=False)
+    assinante_id = Column(Integer, ForeignKey("assinantes.id"), nullable=False)
+    pagamento_id = Column(Integer, ForeignKey("pagamentos.id"), nullable=False)
+    valor_venda = Column(Numeric(10, 2), nullable=False)
+    percentual = Column(Numeric(5, 2), nullable=False, default=40.00)
+    valor_comissao = Column(Numeric(10, 2), nullable=False)
+    status = Column(Text, default="pendente")  # pendente|liberado|pago|cancelado
+    liberacao_prevista_em = Column(DateTime, nullable=False)
+    liberado_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class AfiliadoSaque(Base):
+    """Solicitações de saque de comissão."""
+
+    __tablename__ = "afiliado_saques"
+
+    id = Column(Integer, primary_key=True)
+    afiliado_id = Column(Integer, ForeignKey("afiliados.id"), nullable=False)
+    valor = Column(Numeric(10, 2), nullable=False)
+    status = Column(Text, default="solicitado")  # solicitado|em_analise|pago|recusado
+    pix_chave = Column(Text, nullable=False)
+    transacao_id = Column(Text, nullable=True)
+    pago_em = Column(DateTime, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
 
 
 class Postagem(Base):

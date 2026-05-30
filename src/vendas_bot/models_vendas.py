@@ -81,6 +81,7 @@ def registrar_pagamento(
     valor: float,
     tipo: str = "assinatura",
     status: str = "pendente",
+    pagamento_id: Optional[str] = None,
 ) -> BasePagamento:
     """Registra um pagamento pendente."""
     with SessionLocal() as session:
@@ -89,6 +90,7 @@ def registrar_pagamento(
             valor=valor,
             tipo=tipo,
             status=status,
+            pagamento_id=pagamento_id,
         )
         session.add(pag)
         session.commit()
